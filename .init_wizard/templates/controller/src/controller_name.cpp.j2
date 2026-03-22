@@ -1,0 +1,62 @@
+#include "{{ package_name }}/{{ controller_name }}.hpp"
+
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
+
+using namespace state_representation;
+
+namespace {{ package_name }} {
+
+{{ controller_name }}::{{ controller_name }}()
+    : modulo_controllers::RobotControllerInterface(true, hardware_interface::HW_IF_POSITION) {}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn {{ controller_name }}::add_interfaces() {
+  auto ret = modulo_controllers::RobotControllerInterface::add_interfaces();
+  if (ret != CallbackReturn::SUCCESS) {
+    return ret;
+  }
+  // declaration of parameters, interfaces, inputs, outputs, etc
+  return CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn {{ controller_name }}::on_configure() {
+  auto ret = modulo_controllers::RobotControllerInterface::on_configure();
+  if (ret != CallbackReturn::SUCCESS) {
+    return ret;
+  }
+  // configuration steps before activation
+  return CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn {{ controller_name }}::on_activate() {
+  auto ret = modulo_controllers::RobotControllerInterface::on_activate();
+  if (ret != CallbackReturn::SUCCESS) {
+    return ret;
+  }
+  // activation steps before running
+  return CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn {{ controller_name }}::on_deactivate() {
+  auto ret = modulo_controllers::RobotControllerInterface::on_deactivate();
+  if (ret != CallbackReturn::SUCCESS) {
+    return ret;
+  }
+  // deactivation steps
+  return CallbackReturn::SUCCESS;
+}
+
+controller_interface::return_type {{ controller_name }}::evaluate(const rclcpp::Time&, const std::chrono::nanoseconds&) {
+  // implementation of a control logic
+  return controller_interface::return_type::OK;
+}
+
+bool {{ controller_name }}::on_validate_parameter_callback(const std::shared_ptr<ParameterInterface>& parameter) {
+  // validation of parameters (if needed)
+  return modulo_controllers::RobotControllerInterface::on_validate_parameter_callback(parameter);
+}
+
+}// namespace {{ package_name }}
+
+#include "pluginlib/class_list_macros.hpp"
+
+PLUGINLIB_EXPORT_CLASS({{ package_name }}::{{ controller_name }}, controller_interface::ControllerInterface)

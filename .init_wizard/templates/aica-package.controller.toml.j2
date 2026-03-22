@@ -1,0 +1,8 @@
+[build.packages.{{ controller.package_name.replace('_', '-') }}]
+source = "./source/{{ controller.package_name }}"
+
+## add any required apt dependencies for the custom controller.
+## these packages will be available during the build but also in the final image,
+## so they are useful for dynamic libraries
+# [build.packages.{{ controller.package_name.replace('_', '-') }}.dependencies.apt]
+# libyaml-cpp-dev = "*"

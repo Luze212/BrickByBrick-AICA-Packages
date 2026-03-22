@@ -1,0 +1,17 @@
+[build.packages.{{ component.package_name.replace('_', '-') }}]
+source = "./source/{{ component.package_name }}"
+
+## add any required apt dependencies for the custom component.
+## these packages will be available during the build but also in the final image,
+## so they are useful for dynamic libraries
+# [build.packages.{{ component.package_name.replace('_', '-') }}.dependencies.apt]
+# libyaml-cpp-dev = "*"
+
+## by default, we will install any pip packages in `${package_source}/requirements.txt`
+## but you can customize the name of the requirements file, e.g.
+# [build.packages.{{ component.package_name.replace('_', '-') }}.dependencies.pip]
+# file = "custom_requirements.txt"
+
+## otherwise you can specify the pip packages directly
+# [build.packages.{{ component.package_name.replace('_', '-') }}.dependencies.pip.packages]
+# numpy = "1.0.0"

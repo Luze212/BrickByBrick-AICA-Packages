@@ -1,0 +1,9 @@
+[options.entry_points]
+python_components =
+    # register Python components
+{%- if "py_component" in component_templates_included %}
+    {{ package_name }}::PyComponent = {{ package_name }}.py_component:PyComponent
+{%- endif -%}
+{%- if "py_lifecycle_component" in component_templates_included %}
+    {{ package_name }}::PyLifecycleComponent = {{ package_name }}.py_lifecycle_component:PyLifecycleComponent
+{%- endif -%}

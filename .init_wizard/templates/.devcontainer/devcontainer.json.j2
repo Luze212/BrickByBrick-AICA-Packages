@@ -1,0 +1,26 @@
+{
+  "name": "{{ vs_code_package.replace('_', '-') }}",
+  "containerUser": "ros2",
+  "initializeCommand": [
+    "docker",
+    "build",
+    "--file=aica-package.toml",
+    "--target=development",
+    "--build-arg=config.signing.enabled=false",
+    "--tag=aica-technology/{{ vs_code_package.replace('_', '-') }}:development",
+    "."
+  ],
+  "image": "aica-technology/{{ vs_code_package.replace('_', '-') }}:development",
+  "postStartCommand": "rm -r /home/ros2/ws/src/{{ vs_code_package }} && ln -s ${containerWorkspaceFolder}/source/{{ vs_code_package }} /home/ros2/ws/src/{{ vs_code_package }}",
+  "postCreateCommand": "/usr/local/bin/generate_compile_commands -p {{ vs_code_package }} -t 60 -o ${containerWorkspaceFolder} --cmake-args BUILD_TESTING=ON",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools-extension-pack",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "xaver.clang-format",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}

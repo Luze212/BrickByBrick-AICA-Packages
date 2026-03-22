@@ -1,0 +1,18 @@
+#include <gtest/gtest.h>
+#include <{{ package_name }}/{{ controller_name }}.hpp>
+
+class TestTemplateController : public ::testing::Test {
+protected:
+  void SetUp() override {
+    rclcpp::init(0, nullptr);
+    if (rcutils_logging_set_logger_level("TemplateController", RCUTILS_LOG_SEVERITY_DEBUG) != RCL_RET_OK) {
+      RCLCPP_WARN(rclcpp::get_logger("TemplateController"), "Could not set log level for TemplateController");
+    }
+  }
+
+  void TearDown() override { rclcpp::shutdown(); }
+};
+
+TEST_F(TestTemplateController, test_controller) {}
+
+// Add more test fixtures to validate the controller behavior

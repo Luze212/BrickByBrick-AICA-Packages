@@ -1,0 +1,6 @@
+*.idea
+.DS_Store
+/build
+compile_commands.json
+.*CommandMarker
+__pycache__

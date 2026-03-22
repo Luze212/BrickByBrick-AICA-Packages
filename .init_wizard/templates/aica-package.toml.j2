@@ -1,0 +1,32 @@
+#syntax=ghcr.io/aica-technology/package-builder:v1.4.0
+
+[metadata]
+version = "0.0.1"
+## add a description of the AICA package
+# description = "My custom package"
+
+## a metadata name for the collection is required when bundling multiple packages together.
+## the collection name should be formatted like a Docker image name,
+## and the ROS equivalent collection name must be formatted in lower_snake_case
+{% if collection_name|length == 0 %}# {% endif %}[metadata.collection]
+{% if collection_name|length == 0 %}# {% endif %}name = "{{ collection_name.replace('_', '-') }}"
+{% if collection_name|length == 0 %}# {% endif %}ros-name = "{{ collection_name }}"
+
+[build]
+type = "ros"
+image = "v2.0.5-jazzy"
+
+[build.cmake-args]
+## add any cmake args here, e.g.
+# SOME_FLAG = "ON"
+## you can override them in the CLI with `--build-arg config.build.cmake_args.SOME_FLAG=OFF`
+
+[build.dependencies]
+"@aica/foss/control-libraries" = "v9.2.0"
+"@aica/foss/modulo" = "v5.2.2"
+{% if component and component|length > 0 %}
+{% include 'aica-package.component.toml.j2' %}
+{% endif %}
+{%- if controller and controller|length > 0 %}
+{% include 'aica-package.controller.toml.j2' %}
+{% endif %}

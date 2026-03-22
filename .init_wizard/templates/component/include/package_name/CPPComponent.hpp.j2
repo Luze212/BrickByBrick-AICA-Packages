@@ -1,0 +1,18 @@
+#pragma once
+
+#include <modulo_components/Component.hpp>
+
+namespace {{ package_name }} {
+class CPPComponent : public modulo_components::Component {
+public:
+  explicit CPPComponent(const rclcpp::NodeOptions& options);
+
+protected:
+  bool
+  on_validate_parameter_callback(const std::shared_ptr<state_representation::ParameterInterface>& parameter) override;
+
+  void on_step_callback() override;
+
+  // bool on_execute_callback() override;
+};
+}// namespace {{ package_name }}
