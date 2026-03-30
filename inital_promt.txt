@@ -1,52 +1,210 @@
-Erstelle bitte aus den folgenden Informationen eine CONTEXT.md und nutze sie als Basis für das Projekt:                                                
-Das Ursprungsarchiv ist eine Vorlage zur erstellung von Componenten für die Software AIKA die zur Steuerung von Robotersystemen dient.                   
-Dieses Projekt dient dem zweck der erstellung solcher Componenten. Ziel ist die erstellung der gewünschten Componenten in einer für AICA gewünschten     
-Form im sinne dieser Vorlage.                                                                                                                            
-Ziel der Componenten:                                                                                                                                    
-Die Componenten sollen mit AIKA genutzt werden, um einen KUKA-Roboter dynamisch zu steuern. Bei der Aufgabe für den Roboter geht es darum, via           
-Bilderkennung Bausteine und eine Linie zu erkennen. Die Bausteine sollen auf der Linie sinnvoll abgelegt werden. Ein entsprechendes Yolov11 Model und    
-Code zum erkennen der Linien mittels Farbabgleich ist separat verfügbar und soll später vom Nutzer manuell eingebracht werden können.                    
-                                                                                                                                                         
-Die Componenten entsprechen dabei folgender Logik:   
-Teil 1: Exploration
-Blöcke: Pos-Feed-Cam, Cam-Snapshot, YoloExe, LineCoordExtraction, DataHandler
-1.	Der Pos-Feed-Cam-Block initialisiert: Er liest aus der Datei ExplCoords.yaml die Posen für die Exploration aus und schreibt diese in die ExplorationPoseList. Der Output takeIMG ist während der Exploration immer True – jetzt beginnt der Block normal zu arbeiten (im Loop).
-2.	Abfrage, ob die Länge der ExplorationPoseList > 0 ist. Wenn ja -> obersten Eintrag (Frame) als Output an den JTC (Set Trajectory Service) senden (Pos-Feed-Cam steuert die Exploration); wenn nein -> wird der Pos-Feed-Cam Block zum Gateway, und gibt den Input takeIMG und nextPose (beides von PPL) stumpf weiter an die Outputs (an JTC & Cam-Snapshot).
-3.	Ist die erste Pose aus der ExplorationPoseList erreicht (Vergleich Input: istPose vom Robot-State-Broadcaster), geht der Output Trajectory_success auf True. Dieser ist mit dem Cam-Snapshot-Block und dem PickPlaceLoop verbunden (PPL während Expl deaktiviert).
-4.	Der Cam-Snapshot-Block hat am Input takeIMG die ganze Zeit schon ein True, wenn jetzt der trajecotry_success auch noch auf True springt, wird ein Bild gespeichert (0.3s nachdem beide Inputs True sind) und der Outut IMGtaken gitb ein True zurück an den Pos-Feed-Cam-Block. (Im Gateway Betrieb stellt der IMGtaken Input den takeIMG auf false zurück. Während der Exploration wird diese Mechanik/Input ignoriert). Intern hat der Pos-Feed-Cam noch eine Variable, die Überschneidungen und mehrfache Bilderaufnahmen verhindert.
-5.	Zusätzlich greift der Cam-Snapshot-Block die Positionen: istPose&CamIstPose im Aufnahmemoment von den Inputs ab. Über den Output CamIstPose wird die aktuelle Kameraposition an den YoloExe- & LineCoordExtraction-Block geschickt (beide Blöcke brauchen diese Position um die Worldkoordinaten zu berechnen). 
-6.	Der Yolo-Block bekommt zursätzlich noch die istPose und gibt diese später mit dem Yolo Ergebnis: YoloList + debugIMG über die Outputs an den DataHandler. Ist der Yolo Block fertig wird über einen Output ein Trigger an den LineCoordEx Block geschickt.
-7.	Der LineCoordExtraction-Block hat den PPL_Trigger als Input, wird dieser True ist, geht der PPL Block live, die Expl ist beendet, und die LineCoordEx Block wird deaktiviert. Während der Exploration wird aus dem IMG & CamIstPose eine LineExList erstellt, welche ggf dropoffCoords beinhaltet, und über einen Output zusammen mit einem debugIMG an den Datahandler  geschickt.
-8.	Der DataHandler hat von dem Yolo Block schon die Inputs istPose, YoloList, debugIMG bekommen. Nun schickt auch der Line CoordsEx Block eine LineExList und ein debug_IMG. Die IMGs werden gespeichert. Für den PPL Bock werden nun Masterlisten erstellt. Wenn len(YoloList)>=1 wird die istPose an die Liste KlotzOverviewList appended. 
-Ist die len(LineExList) >0 & len(LineExList) >len(dropoffCoordsList) werden alle dropoffCoordsList Einträge mit den LineExList Einträgen ersetzt.
-Erklärung: Wenn len(LineExList) >0 & len(LineExList) >len(dropofCoordsList) liegt eine Koordinaten Liste mit den meisten Klotzepositionen vor (angenommen das muss die beste Belegung der Linien Bedeuten sein) wollen wir diesen Belegungsplan später umsetzen.
-9.	Nächste Explorations-Pose: Der Loop im Pos-Feed-Cam Block, iteriert über die Einträge der ExplorationPoseList. Wenn IMGtaken auf True gesetzt wird (vom Cam-Snapshot-Block) wird der aktuell oberste Eintrag (zB erste Pose) gepoppt, und der neuste oberste Eintrag der ExplorationPoseList wird über den Output nextPose an Aica gesendet. Hier geht es wieder zu Schritt 2.
-Ende des Exploration-Loops:
-Wenn die Länge der ExplorationPoseList == 0 ist, geht der Output Trigger-PickPlaceLoop auf True. Das aktiviert den PPL Block und deaktiviert den LineCoordEx Block. Der Pos-Feed-Cam Block wird zum Gateway. 
-Teil 2: Der Pick & Place Loop
-Blöcke: Alle aus Teil 1, -LineCoordsEx und + PickPlaceLoop-Block & Tiefenkamera-Stream.
-Ausgangssituation: Die Exploration ist beendet. Von dem DataHandler bekommt der PickPlaceLoop-Block die Masterlisten: KlotzOverviewList, DropoffCoordsList.
-Bei der Initialisierung des PickPlaceLoop-Blocks (ab jetzt PPL-Block) wird diese Bedingung geprüft. Dazu wird die Hover-Höhe „geladen“. Dazu werden PPL interne Listen erstellt um die dropoff und Overview Posen mit zwischen Posen zu umkleiden: pickList und placeList. Aus denen wird später über das Gateway die Positionen
-Der Pick & Place Loop läuft solange: Länge der DropoffCoordsList > 0 & Länge der KlotzOverviewList > 0.
-Pick Sequenz:
-1.	Im PPL: Der erste Eintrag der KlotzOverviewList wird an Pos-Feed-Cam gesendet (wird an Aica weitergegeben). Der PPL-Output takeIMG ist auf True – dadurch wird automatisch die Bildaufnahme- & Auswerte-Pipeline ausgelöst, sobald der Roboter an der ersten Klotz-Overview-Pose ankommt. Über den DataHandler kommt eine Yolo-Liste mit Klotzzentren-Koordinaten zurück zum PPL. Wenn die Länge == 0 ist, wird der oberste Listeneintrag(KlotzOverviewList) entfernt (gepoppt) und zum nächsten gefahren.
-2.	Stück für Stück zum Pick: Die YoloList(aus aktueller KlotzOverviewPos) wird (sobald ein True von trajectory_success ankommt – TCP hat dann KlotzOverviewPos erreicht) nach Größe der  Maske sortiert und das Zentrum der größten Maske gespeichert. Aus diesen Koordinaten wird eine TCP Pose berechnet, bei welcher die Kamera senkrecht über diesen Koordinaten steht und als x_grob und y_grob gespeichert. Im PPL wird nun eine Aufnahme der Tiefenkamera gespeichert und ein 5x5 Patch auf dem Klotzzentrum ausgewertet und als z_pick gespeichert. Die Kamera soll in der Höhe z_pick + zHover senkrecht über dem Klotz stehen. Dafür muss die TCP Höhe berechnet werden. Die pickList wird geleert!
-Die neue Koordinate bei der der Kamerasensor senkrecht dem Klotz steht (x_grob, y_grob, z_pick+z_hover-KameraTCPAbstand) wird in die interne Liste pickList geschrieben.
-3.	Erste Annährung: PPL publisht am Output nextPose nun nicht mehr den obersten Eintrag aus KlotzOverviewList sonder den ersten Eintrag aus der pickList. Der Output takeIMG ist True – die Kamera fährt senkrecht über den Block, Cam-Snapshot macht ein Bild, der DataHandler sendet eine neue YoloList. Es wird wieder nach Maskengröße sortiert, der Zielblock muss nun der größte im Bild sein, die neuen Klotzcenter Koordinaten werden als x_fein und y_fein mit z_pick-zSauger gespeichert und in die pickListe geschreiben (append). Sollte in der aktuellen YoloList keine Maske sein, Abbruch zurück zu Schritt 1 (oberster KlotzOverviewPose Eintrag). zSauger in mm, „wie weit“ die Saugglocke in den Klotz gefahren wird.
-4.	Berechnung der Pose nach dem Pick: die pickList wird erweitert um einen Eintrag mit x_fein y_fein z_pick+zhover. (ist dann Eintrag 3 bzw pickList[2])
-5.	Pick Anfahrt: nun wird der 2. Eintrag der pickList[1] gepublisht. takeIMG False. Der Sauger ist nun schlüssig am Klotz angekommen wird auf den Input trajectory_success geachtet(mit delay, weil sonst noch der trajectory_success von der vorherigen Pose anliegen könnte), wenn dieser True gibt  wird der PPL Output vacuum_on auf True gesetzt und ein Programm delay von 0.3s (Zeit für vaccuum_on) ausgeführt.
-6.	Retract: Die nächste Pose aus der pickList wird gepublished: pickList[2], der Klotz wird 15cm angehoben. Der Pick ist abgeschlossen. 
-Place im PPL:
-1.	Die placeList wird geleert. Aus dem obersten Eintrag der dropoffCoordList wird gespeichert:  x_drop y_drop z_drop. In der leeren placeList wird ein erster Eintrag gespeichert: x_drop y_drop z_drop+hover. Es wird ein zweiter Eintrag gepseichert: x_drop y_drop z_drop und ein dritter Eintrag: x_drop y_drop z_drop+hover. Der zweite Eintrag muss bei etwas Routine korrigiert werden, aus z_drop wird z_drop-zSauger. Für den Anfang soll der Klotz 1-2mm fallen gelassen werden.
-2.	pickHover zu placeHover: Nun wird von pickList auf placeList gewechselt und der oberste Eintrag der placeList gepublished. 
-3.	Place: Bei trajectory_success ist placeHover erreicht und der 2. Eintrag wird gepublished (place). Der Klotz wird über den Boden gefahren oder sogar „in“ den Boden. Bei trajectory_success wird der PPL Output vacuum_on auf False gesetzt. Ein 0.5s Delay wird ausgeführt. Dann wird der 3. placeList Eintrag wird gepublished. Bei trajectory_success wird der oberste Eintrag in der dropoffCoordsList gepoppt. Der Klotz liegt, der Vacuumgripper ist 15cm über dem Klotz. 
-4.	Loop Abfrage: wenn DropoffCoordsList > 0 & Länge der KlotzOverviewList > 0, springe zu Pick Sequenz. Sobald eins davon 0 ist, gibt es keine Klötze mehr zu greifen oder keine Plätze mehr zu belegen, dann wird ein Abschlussframe gepublished: frame3, hardgecoded in Block, eine Homeposition die anzeigt, die Arbeit ist getan.
+Du bist ein leitender Robotics Software Engineer und absoluter Experte für das AICA-Framework (basiert auf ROS 2 Lifecycle Nodes, abstrahiert diese aber vollständig). 
 
-Die Kommunikation zwischen den Blöcken inform von Datenkanälen ist zunächst nicht näher definiert und kann von Claude im eigenen ermessen gewählt werden 
- im sinne des Projektes, sollange keine andere Information vom Nutzer vorgegeben wird.                                                                   
-                                                                                                                                                         
-Bei der erstellung des Codes soll darauf geachtet werden, dass nur notwendige Dateien angepasst werden im Sinne der Vorlage. Weiter sollen auch die      
-Packeges und Imports in Requeremnts gepflegt werden.                                                                                                     
-                                                                                                                                                         
-Diese Informationen sollen nun analysiert werden und in der CONTEXT.md für Claude zur verfügung gestellt werden. Weitere Arbeitsschritte werden im       
-anschluss vom Nutzer vorgegeben. Claude soll nicht selbsständig weiterarbeiten.    
+Deine Aufgabe ist es, für ein Pick & Place Projekt mit einem KUKA-Roboter 6 Python-LifecycleComponents, die dazugehörigen JSON-Beschreibungsdateien und die Paket-Konfigurationen (CMakeLists.txt, package.xml, setup.cfg) zu vervollständigen. Das Grundgerüst des Pakets (Ordnerstruktur, Root-Dateien) wurde bereits mit dem AICA-Wizard erstellt und darf strukturell nicht verändert werden.
+
+**DEINE ARBEITSGRUNDLAGE (BITTE JETZT LESEN):**
+1. Lese und befolge zwingend die lokale Datei `Architektur.md`. Sie enthält absolute Verbote (kein klassisches ROS 2) und die Vorgaben zur Ament-Ordnerstruktur.
+2. Lese die lokale Datei `CONTEXT.md` für das High-Level-Verständnis und die Dateipfade.
+
+**ZUSÄTZLICHE IMPLEMENTIERUNGSREGELN:**
+* **Keine Halluzinationen:** Erfinde keine AICA-spezifischen C++ Makros in der CMakeLists. Nutze nur Standard-CMake (wie `install(DIRECTORY ./component_descriptions DESTINATION .)`).
+* **Persistenz in State Machines:** Variablen, die in einem Zustand berechnet und in einem späteren Taktzyklus benötigt werden (wie z.B. `z_pick_gespeichert` oder `x_grob`), MÜSSEN in der `__init__` (z.B. mit `self._z_pick_gespeichert = 0.0`) initialisiert werden.
+* **Logging:** Füge bei jedem Zustandswechsel in der State Machine (z.B. PPL-Block) oder bei wichtigen Flanken-Triggern ein `self.get_logger().info(...)` ein.
+* **Array Flattening:** Halte dich penibel an das Entpacken der Arrays via `for`-Schleifen (Stride 7 für Posen, Stride 8 für YOLO-Eckpunkte).
+* **Abhängigkeiten pflegen:** Alle verwendeten Python-Bibliotheken (wie numpy, math etc.), die für die Platzhalter-Logik importiert werden, MÜSSEN zwingend in der `package.xml` (als `<exec_depend>`) und in einer zu erstellenden `requirements.txt` im Root-Verzeichnis eingetragen werden.
+* **Umgang mit Lücken (TO-DOs):** Es gibt physikalische/mathematische Lücken (Pinhole-Kamera-Math, TF-Offsets, KUKA-Quaternion, YOLO-Inferenz). Baue an diesen Stellen die Logik drumherum perfekt auf und füge extrem auffällige Platzhalter ein. 
+    Beispiel-Format:
+    # ══════════════════════════════════════════════════════════════════════════
+    # TO-DO: [Kurze Beschreibung, z.B. Pinhole-Berechnung]
+    # Input: ...
+    # Erwarteter Output: ...
+    # self._mein_wert = berechne_etwas()
+    # ══════════════════════════════════════════════════════════════════════════
+
+**HIER IST DIE DETAILLIERTE BLOCK-LOGIK FÜR DIE 6 KOMPONENTEN:**
+
+Detaillierte Systemarchitektur & Block-Logik
+1. Block: ExplorationNavigator
+Zweck: Steuert die Exploration, führt den Handshake mit der Kamera und agiert später als passives Gateway.
+Initialisierung:
+YAML Einlesen: Der Block greift auf den konfigurierten Dateipfad (z. B. ExplCoords.yaml) zu.
+Er durchläuft die Datei und wandelt die dort hinterlegten Positionen und Orientierungen in echte AICA CartesianPose-Objekte um.
+Diese Posen werden in die interne Variable exploration_pose_list geladen.
+Der interne state wird explizit auf "EXPLORATION" gesetzt.
+Die Variablen waiting_for_camera_reset und trajectory_success werden auf False gezwungen.
+
+Inputs: ist_pose (cartesian_pose), target_pose_in (cartesian_pose, vom PPL), take_img_in (bool, vom PPL), img_taken (bool, von Kamera)
+Outputs: target_pose_out (cartesian_pose), take_img_out (bool), trajectory_success (bool), trigger_ppl (bool)
+Interne Variablen: state ("EXPLORATION" oder "GATEWAY"), exploration_pose_list (Array von Posen), waiting_for_camera_reset (bool)
+Detaillierte interne Logik (on_step_callback):
+Zustandsprüfung: Abfrage, ob state == "EXPLORATION".
+Wenn EXPLORATION:
+Abfrage, ob Länge der exploration_pose_list > 0 ist.
+Wenn JA (Liste nicht leer):
+Sende obersten Eintrag (exploration_pose_list[0]) konstant an Output target_pose_out.
+Distanzberechnung: Berechne euklidische Distanz (X, Y, Z) zwischen Input ist_pose und target_pose_out.
+Zielerreichung: Abfrage, ob Distanz < 0.002 (2mm) UND waiting_for_camera_reset == False.
+Wenn JA: Setze trajectory_success = True und take_img_out = True.
+Handshake-Warten: Abfrage, ob Input img_taken == True.
+Wenn JA: Kamera hat fotografiert. Setze take_img_out = False, trajectory_success = False. Entferne (pop) den Eintrag [0] aus der Liste. Setze waiting_for_camera_reset = True (Sicherheits-Lock).
+Sicherheits-Lock lösen: Abfrage, ob waiting_for_camera_reset == True UND img_taken == False.
+Wenn JA: Kamera hat das fallende Signal bestätigt. Setze waiting_for_camera_reset = False. Der Zyklus für die nächste Pose beginnt.
+Wenn NEIN (Liste leer):
+Setze nach 0.5s trigger_ppl = True. Wechsle internen state auf "GATEWAY".
+Wenn GATEWAY:
+Leite Input target_pose_in stumpf 1:1 auf Output target_pose_out weiter.
+Leite Input take_img_in stumpf 1:1 auf Output take_img_out weiter.
+Berechne weiterhin die Distanz zwischen ist_pose und target_pose_in. Wenn < 0.002, setze trajectory_success = True, sonst False.
+
+2. Block: PoseTriggeredCamera
+Zweck: Schießt verzögerte Snapshots und friert Roboterdaten 100% synchron ein.
+Initialisierung: is_delaying = False, img_taken = False
+Inputs: take_img (bool), trajectory_success (bool), ist_pose_in (cartesian_pose), cam_ist_pose_in (cartesian_pose, fest im URDF), image_stream (other/Image)
+Outputs: img_taken (bool), ist_pose_out (cartesian_pose), cam_ist_pose_out (cartesian_pose), image_out (other/Image)
+Interne Variablen: timer_start (Zeitstempel), is_delaying (bool)
+Detaillierte interne Logik (on_step_callback):
+Trigger-Abfrage: Prüfe ob take_img == True UND trajectory_success == True UND img_taken == False.
+Wenn JA: * Prüfe ob is_delaying == False. Wenn ja: Setze is_delaying = True, speichere aktuelle Uhrzeit in timer_start.
+Berechne Delta: aktuell - timer_start.
+Abfrage, ob Delta >= 0.3 Sekunden.
+Wenn JA: (Snapshot-Moment!) Führe harten Deep-Copy aus: Speichere image_stream auf image_out. Speichere ist_pose_in auf ist_pose_out. Speichere cam_ist_pose_in auf cam_ist_pose_out.
+Setze Output img_taken = True. Setze is_delaying = False.
+Abbruch-Sicherheit: Falls während is_delaying == True das Signal trajectory_success auf False abfällt (Roboter wurde weggeschoben), setze is_delaying = False (Timer bricht ab).
+Handshake-Reset: Abfrage, ob trajectory_success == False UND img_taken == True.
+Wenn JA: Der Roboter ist abgefahren. Setze img_taken = False.
+
+3. Block: YoloObjectDetector
+Zweck: Findet Klötze im Bild, generiert reine 2D-Eckpunkt-Koordinaten und leitet die exakten Aufnahme-Posen synchron an den DataHandler weiter.
+Initialisierung: Während der on_setup-Phase lädt dieser Block das trainierte YOLOv11-OBB Modell (die .pt-Gewichtsdatei) von der Festplatte in den Arbeitsspeicher (RAM/GPU). Dies ist ein zeitintensiver Vorgang, der zwingend vor dem ersten Bild passieren muss, damit der laufende Betrieb später nicht blockiert wird.
+Der Output yolo_done_trigger wird auf False gesetzt. Der Block ist nun passiv und wartet auf das erste Bild-Event.
+
+Inputs: image_in (other/Image, Event-Trigger), ist_pose_in (cartesian_pose), cam_ist_pose_in (cartesian_pose)
+Outputs: yolo_corners_list (double_array), ist_pose_out (cartesian_pose), cam_ist_pose_out (cartesian_pose), yolo_done_trigger (bool)
+Detaillierte interne Logik (user_callback auf image_in):
+Event gefeuert: Das eingefrorene Bild (samt Posen) kommt an.
+Jage das Bild durch das trainierte YOLOv11-nano Modell.
+Platzhalter für das vorbereitete Modell(Pfad)
+Extrahiere die gefundenen Masken. 
+Masken, die den Rand berühren (näher als 5 Pixel am Rand sind) werden aussortiert.
+Lege für die übrigen Masken Tangenten an, um exakt 4 Eckpunkte (P1, P2, P3, P4) im 2D-Pixelraum (u, v) zu bestimmen.
+Schreibe alle Eckpunkte hintereinander in ein flaches 1D-Array (Syntax: [u1, v1, u2, v2, u3, v3, u4, v4, u5, v5...]).
+Platzhalter für die Eckpunktberechnung und Orientierungsbestimmung
+Sende dieses Array an den Output yolo_corners_list.
+Posen-Routing: Leite den Input ist_pose_in stumpf 1:1 auf den Output ist_pose_out weiter. Leite den Input cam_ist_pose_in stumpf 1:1 auf den Output cam_ist_pose_out weiter.
+Setze yolo_done_trigger = True. (Im regulären on_step_callback wird dieses Flag im darauffolgenden Takt direkt wieder auf False gesetzt, um eine saubere Flanke für den Linien-Block zu erzeugen).
+
+4. Block: DropoffLineExtractor
+Zweck: Erkennt Ablagelinien und generiert direkte 3D-TCP-Ablageposen.
+Inputs: image_in (other/Image), cam_ist_pose (cartesian_pose), yolo_done_trigger (bool, Event-Trigger), trigger_ppl (bool)
+Outputs: line_ex_list (double_array)
+Detaillierte interne Logik (user_callback auf yolo_done_trigger steigende Flanke):
+Bypass-Prüfung: Abfrage, ob trigger_ppl == True. Wenn JA -> sofortiger Abbruch (Return). Spart CPU in Phase 2.
+Lade image_in.
+Platzhalter für Bernhard's Skript
+Speichere alles in ein flaches Array (Syntax: [X, Y, Z, Qx, Qy, Qz, Qw, X2, Y2...]) und publishe auf line_ex_list.
+
+5. Block: MasterListManager (DataHandler)
+Zweck: Geometrische Berechnungen (Pixel $\rightarrow$ 3D), Verdreh-Optimierung für den Roboterarm, Filterung und Master-Plan Erstellung.
+Initialisierung: Die drei zentralen Speicher-Arrays master_overview_out, master_dropoff_out und filtered_yolo_out werden als leere Listen [] initialisiert.
+Die Hardware-Konstanten (wie Kameramatrix $f_x, f_y, c_x, c_y$ und die Tisch-Höhe $Z_{Tisch}$) werden als interne Variablen bereitgestellt.
+Der Block verharrt passiv, bis das erste Event von YOLO oder dem Linien-Block eintrifft.
+
+Inputs: yolo_corners_list_in (double_array), line_ex_list_in (double_array), ist_pose_in (cartesian_pose, vom YOLO durchgereicht), cam_ist_pose_in (cartesian_pose, vom YOLO durchgereicht), trigger_ppl (bool)
+Outputs: master_overview (double_array), master_dropoff (double_array), filtered_yolo (double_array)
+Detaillierte interne Logik:
+Event: YOLO-Daten kommen an:
+Abfrage, ob Länge yolo_corners_list_in > 0.
+Wenn JA & trigger_ppl = False: Hänge die aktuelle ist_pose_in (Syntax: X,Y,Z, Qx,Qy,Qz,Qw) als neuen 7-stelligen Block an das Array master_overview an.
+Geometrie-Rechnung (Eckpunkte $\rightarrow$ 3D Pose mit Twist-Minimierung):
+Wandle die ist_pose_in in Euler-Winkel um und extrahiere den aktuellen Yaw-Winkel (Z-Rotation) des Roboter-TCPs. Speichere diesen als current_robot_yaw.
+Nimm in einer Schleife immer 8 Werte (P1 bis P4) aus der yolo_corners_list_in.
+Berechne den Diagonalschnittpunkt der 4 Ecken: $u_{center} = \frac{(u_1 + u_3)}{2}$, $v_{center} = \frac{(v_1 + v_3)}{2}$.
+Berechne die Polygonfläche (Gaußsche Trapezformel aus den 4 Ecken) als Maß für die Klotzgröße.
+Berechne den Kantenwinkel (die Ausrichtung des Klotzes im 2D-Bild): $\theta = \arctan2((v_2 - v_1), (u_2 - u_1))$.
+Platzhalter um diese Berechnung zu implementieren
+Projektion (Pinhole): * Wandle Pixel $(u_{center}, v_{center})$ mit Kameramatrix ($f_x, f_y, c_x, c_y$) in einen 3D-Sichtstrahl um.
+Rotiere und verschiebe diesen Strahl mit der Input-Variable cam_ist_pose_in ins Weltkoordinatensystem.
+Schneide den Strahl mit der Tisch-Ebene (Hardware-Parameter $Z_{Tisch}$). Das ergibt die echten Weltkoordinaten $X_{klotz}, Y_{klotz}$.
+Platzhalter Tischhöhe
+Verdreh-Optimierung (Twist Minimization): * Ein Klotz ist rechteckig/symmetrisch. Ihn bei Winkel $\theta$ zu greifen, ist mechanisch identisch dazu, ihn bei $\theta + 180^\circ$ zu greifen.
+Abfrage: Welcher der beiden Winkel ($\theta$ oder $\theta + 180^\circ$) hat die geringere mathematische Differenz zum current_robot_yaw?
+Wähle den Winkel mit der geringsten Differenz und speichere ihn als opt_yaw. (Dadurch verwindet sich der Arm beim Greifen minimal).
+Quaternion-Erstellung: Generiere ein 3D-Quaternion, bei dem die Z-Achse/der Sauger zwingend strikt nach unten gezwungen wird (z.B. Roll = $180^\circ$, Pitch = $0^\circ$) UND der Winkel opt_yaw für die Yaw-Rotation angewendet wird.
+Zwischenspeichern des fertigen Klotzes im Format [X, Y, Area, Qx, Qy, Qz, Qw]. Die Rotationsachse des Quaternions immer = der negativen World Z-Achse.
+Event: Linien-Daten kommen an:
+Abfrage, ob Länge(line_ex_list) > Länge(master_dropoff).
+Wenn JA: Überschreibe master_dropoff komplett mit der line_ex_list.
+Filter-Schleife (Kollisionsprüfung):
+(Dieser Teil bleibt unverändert) Iteriere über alle berechneten $(X_{klotz}, Y_{klotz})$.
+Berechne euklidische Distanz zu jedem Platz im master_dropoff.
+Abfrage: Ist Distanz < 0.01m?
+Wenn NEIN: Schreibe Klotz final in den Output filtered_yolo (Syntax: [X, Y, Area, Qx, Qy, Qz, Qw]).
+Wenn JA: Klotz liegt bereits auf einer Ablagelinie und wird verworfen (nicht in den Output kopiert).
+
+
+
+6. Block: PickPlaceController (PPL)
+Zweck: State-Machine für die Roboter-Ausführung in Phase 2.
+Initialisierung: Der interne Zustand der State Machine wird strikt auf state = "INIT" gesetzt.
+Der Output vacuum_on wird auf False gesetzt, um sicherzustellen, dass der Greifer beim Systemstart deaktiviert ist.
+In seiner on_step_callback-Schleife fragt der Block ab jetzt bei jedem Taktzyklus ab: Ist der Input trigger_ppl == True?
+Solange dieser Input False ist (was während der gesamten Explorationsphase der Fall ist), überspringt der Block alle weiteren Berechnungen und verharrt im sicheren Standby.
+Listen: master_overview_in und master_dropoff kopieren in interne Listen: master_overview_local und master_dropoff_local, damit diese veränderbar sind. Dieses Kopieren darf im Code nur ein einziges Mal passieren! Nämlich exakt in dem Moment, wenn trigger_ppl auf True springt und der Zustand von INIT auf CHECK_LISTS wechselt.
+
+Inputs: trigger_ppl, trajectory_success, img_taken, filtered_yolo (double_array), master_dropoff, master_overview, depth_image (other/Image)
+Outputs: target_pose_out, take_img_out, vacuum_on
+Zustände: CHECK_LISTS, MOVE_OVERVIEW, WAIT_IMG_1, MOVE_PICK_HOVER, WAIT_IMG_2, EXECUTE_PICK, PREPARE_PLACE, EXECUTE_PLACE
+Detaillierte interne Logik (on_step_callback):
+CHECK_LISTS:
+Abfrage: len(master_overview_local) > 0 UND len(master_dropoff_local) > 0?
+Wenn JA -> Wechsle zu MOVE_OVERVIEW.
+Wenn NEIN -> target_pose_out = Hardcodierte Home-Pose, Ende.
+MOVE_OVERVIEW:
+Lies den ersten Werte aus master_overview_local. Schreibe als CartesianPose auf target_pose_out.
+Flankenauswertung: Wenn trajectory_success von False auf True springt -> take_img_out = True, wechsle zu WAIT_IMG_1.
+WAIT_IMG_1 (Grob-Auswertung & Tiefe):
+Wenn img_taken == True: Setze take_img_out = False.
+Abfrage: len(filtered_yolo) == 0?
+Wenn JA -> Lösche (pop) den obersten Werten aus master_overview_local, wechsle zu CHECK_LISTS.
+Wenn NEIN -> Nimm den Klotz mit der höchsten Area aus dem Array.
+Tiefen-Berechnung: * Wandle depth_image via image.get_data() in ein Numpy-Array um.
+Hole den Median eines 5x5 Patches an der Pixel-Stelle $(u_{center}, v_{center})$ des größten Klotzes. Das ergibt den Tiefenabstand $d$.
+Projektion mit Tiefe: Wandle $(u_{center}, v_{center}, d)$ mit Intrinsics in 3D-Kamera-Koordinaten um. Rotiere diesen Punkt mit der aktuellen Kamerapose ins Welt-System -> Das ergibt die echte Klotzhöhe $Z_{pick}$. Da WAIT_IMG_1 und WAIT_IMG_2 unterschiedliche Taktzyklen (States) sind, musst du im Python-Code in WAIT_IMG_1 den Wert zwingend mit self.z_pick_gespeichert = Z_pick in die Klasse schreiben, damit er in WAIT_IMG_2 noch existiert. Lokale Variablen werden am Ende eines Taktzyklus sonst gelöscht.
+Hierfür braucht es einen Platzhalter, Format, Berechnung, Übertragung in Weltkoordinaten sind noch nicht vollständig geklärt.
+Pose berechnen: Erstelle Hover-Pose $(X_{klotz}, Y_{klotz}, Z_{pick} + hover)$. Die Orientierung ist das berechnete Klotz-Quaternion.
+Entscheidung TF-Offset: Da die Kamera einen physischen Abstand zum TCP hat, MÜSSEN wir von $X$ und $Y$ den KameraTCPAbstand aufaddieren, damit die Kamera (und nicht der Sauger!) über dem Klotz zentriert wird.
+Platzhalter: Die Umrechnung um die Kamera, statt den Sauger über ein Objekt zu fahren
+Wechsle zu MOVE_PICK_HOVER.
+MOVE_PICK_HOVER & WAIT_IMG_2 (Fein-Anfahrt):
+Sende Hover-Pose. Bei trajectory_success Flanke -> Snapshot triggern.
+In WAIT_IMG_2: Verarbeite das frische, zentrierte Bild analog. Nimm größte Maske.
+Extrahiere das neue, präzise $(X_{fein}, Y_{fein}, Qx, Qy, Qz, Qw)$.
+Generiere Pick-Pose $(X_{fein}, Y_{fein}, Z_{pick} - z\_sauger)$ und Retract-Pose $(X_{fein}, Y_{fein}, Z_{pick} + hover)$.
+Wechsle zu EXECUTE_PICK.
+EXECUTE_PICK:
+Sende Pick-Pose. Bei Ankunft (trajectory_success Flanke) -> Setze vacuum_on = True.
+Starte internen Timer (0.3s). Bei Ablauf: Sende Retract-Pose. Bei Ankunft -> Wechsle zu PREPARE_PLACE.
+PREPARE_PLACE & EXECUTE_PLACE:
+Lies den ersten Wert (X,Y,Z, Qx,Qy,Qz,Qw) aus master_dropoff_local. Die Rotation aus der Linie passt direkt für den TCP!
+Sende Hover-Pose ($Z + hover$). Bei Ankunft -> Sende Drop-Pose ($Z$).
+Bei Ankunft -> vacuum_on = False, warte 0.5s.
+Sende Retract-Pose. Lösche (pop) den ersten Wert aus master_dropoff_local.
+Wechsle zurück zu CHECK_LISTS.
+
+Antworten auf deine Architektur-Fragen
+1. Wie schreiben wir Listen, wie sollen wir die am besten übergeben?
+In AICA können keine "Listen von Objekten" über die UI-Kabel geschickt werden, sondern nur flache Zahlen-Arrays (signal_type: double_array).
+Die Lösung ist das "Flattening" (Flachklopfen) mit einem festen Schrittmaß (Stride):
+Ein Frame hat 7 Werte (X, Y, Z, Qx, Qy, Qz, Qw).
+Zwei Frames in einer Liste sehen so aus: [X1, Y1, Z1, Qx1, Qy1, Qz1, Qw1, X2, Y2, Z2, Qx2, Qy2, Qz2, Qw2].
+Der empfangende Block durchläuft das Array in einer for(int i = 0; i < array.length; i += 7) Schleife, um die Frames wieder zusammenzubauen.
+2. Wie published AICA Frames? Wie will es der JTC empfangen?
+Der AICA Component Runner abstrahiert ROS völlig. Wenn du in Python eine sr.CartesianPose("pose_name", "base_link") erstellst und mit .set_position([x,y,z]) und .set_orientation([qx,qy,qz,qw]) füllst, bindest du sie an den Output.
+Der AICA C++ Kern übersetzt diese CartesianPose unter der Haube automatisch in eine geometry_msgs/msg/PoseStamped und publisht diese auf das ROS Topic, auf dem der JTC lauscht. Du musst in Python keine Header, Timestamps oder Frames zusammenbauen, das erledigt das AICA-Framework anhand des Namens "base_link".
+3. Wie kann man Listen von Masken-Eckpunkten weitergeben?
+Genau wie bei den Frames. Eine Maske hat 4 Eckpunkte mit jeweils U- und V-Pixeln, also 8 Werte pro Klotz.
+YOLO sendet ein double_array: [U1,V1, U2,V2, U3,V3, U4,V4, U1_B,V1_B...].
+Der DataHandler iteriert in i += 8 Schritten darüber, greift sich die 8 Werte, berechnet mit klassischer Schulgeometrie den Diagonalschnittpunkt als Center und den Winkel der Kante als Ausrichtung.
+
+
+Bitte generiere nun den Code strukturiert und vollständig. Aktualisiere zuerst die Root-Konfigurationsdateien (CMakeLists, package.xml, setup.cfg) und generiere dann Block für Block (erst die .py, dann die dazugehörige .json im richtigen Unterordner).

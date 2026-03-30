@@ -1,0 +1,74 @@
+{
+  "name": "Pick Place Controller",
+  "description": {
+    "brief": "State-Machine für den vollautomatischen Pick-&-Place-Ablauf (Phase 2).",
+    "details": "Verharrt im Standby solange trigger_ppl=False (Phase 1). Beim ersten trigger_ppl=True werden master_overview und master_dropoff einmalig in lokale, veränderbare Listen kopiert. filtered_yolo ist ein Live-Input – er wird niemals lokal kopiert. Das ermöglicht den physikalischen Closed-Loop: jeder gegriffene Klotz fehlt im nächsten Kamerabild und damit automatisch in filtered_yolo. WAIT_IMG_1 und WAIT_IMG_2 synchronisieren auf yolo_done_trigger (nicht img_taken), damit filtered_yolo garantiert frisch ist. Zustände: INIT→CHECK_LISTS→MOVE_OVERVIEW→WAIT_IMG_1→MOVE_PICK_HOVER→WAIT_IMG_2→EXECUTE_PICK→PREPARE_PLACE→EXECUTE_PLACE→CHECK_LISTS→FINISHED (Terminal). EXECUTE_PICK und EXECUTE_PLACE verwenden Sub-Zustände mit nicht-blockierenden Timern für Vakuum-Delays."
+  },
+  "registration": "brickbybrick_sonnet::PickPlaceController",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "PPL-Trigger",
+      "description": "Phase-2-Signal vom ExplorationNavigator. Erst wenn True startet die State-Machine.",
+      "signal_name": "trigger_ppl",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Trajektorie erfolgreich",
+      "description": "True wenn Roboter die Zielpose erreicht hat (Distanz < 2mm). Flankenauswertung (False→True) löst Zustandswechsel aus.",
+      "signal_name": "trajectory_success",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "MLM fertig (Stafetten-Trigger)",
+      "description": "1-Takt-Puls vom MasterListManager. Steigende Flanke garantiert, dass filtered_yolo bereits frisch ist (YOLO + MLM-Pipeline abgeschlossen).",
+      "signal_name": "mlm_done_trigger",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Gefilterte Klotz-Posen (Live)",
+      "description": "Live-Input vom MasterListManager. Stride 9: [X,Y,Area,u_center,v_center,Qx,Qy,Qz,Qw,...]. Wird bei jeder YOLO-Inferenz überschrieben – NICHT lokal kopieren!",
+      "signal_name": "filtered_yolo",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Ablage-Positionen",
+      "description": "3D-Ablageposen vom MasterListManager. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird einmalig beim Start von Phase 2 kopiert.",
+      "signal_name": "master_dropoff",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Übersichts-Posen",
+      "description": "Kameraaufnahme-Posen aus Phase 1 vom MasterListManager. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird einmalig beim Start von Phase 2 kopiert.",
+      "signal_name": "master_overview",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Tiefenbild",
+      "description": "Echtzeit-Tiefenbild der Kamera. Wird in WAIT_IMG_1 und WAIT_IMG_2 ausgewertet um Z_pick (exakte Klotz-Höhe) zu bestimmen.",
+      "signal_name": "depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "state_representation::Image"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Ziel-Pose (Roboter)",
+      "description": "Nächste Zielpose für den Roboter-TCP. Wird vom ExplorationNavigator (GATEWAY-Modus) 1:1 an den JointTrajectoryController weitergeleitet.",
+      "signal_name": "target_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Bild aufnehmen (Trigger)",
+      "description": "True um PoseTriggeredCamera einen Snapshot auslösen zu lassen. Wird auf False gesetzt sobald yolo_done_trigger feuert (YOLO+MLM-Pipeline abgeschlossen).",
+      "signal_name": "take_img_out",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Vakuum EIN",
+      "description": "True aktiviert den Saugnäpf-Greifer. True wird gesetzt bei Ankunft an der Pick-Pose, False bei Ankunft an der Ablage-Pose.",
+      "signal_name": "vacuum_on",
+      "signal_type": "bool"
+    }
+  ]
+}

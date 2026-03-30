@@ -1,0 +1,30 @@
+# Explorationsposen für die Pick-&-Place-Anlage
+# ─────────────────────────────────────────────────────────────────────────────
+# Format: Jeder Eintrag ist eine benannte Pose mit Position (x, y, z in Meter)
+# und Orientierung als Quaternion (qx, qy, qz, qw, skalarer Teil zuletzt).
+# Die Posen werden vom ExplorationNavigator in der hier angegebenen Reihenfolge
+# von oben nach unten abgefahren.
+#
+# Beispiel – einfach duplizieren und Werte anpassen:
+#
+# pose_1:
+#   position:
+#     x: 0.500
+#     y: 0.000
+#     z: 0.400
+#   orientation:
+#     qx: 0.000
+#     qy: 1.000
+#     qz: 0.000
+#     qw: 0.000
+#
+# pose_2:
+#   position:
+#     x: 0.500
+#     y: 0.300
+#     z: 0.400
+#   orientation:
+#     qx: 0.000
+#     qy: 1.000
+#     qz: 0.000
+#     qw: 0.000

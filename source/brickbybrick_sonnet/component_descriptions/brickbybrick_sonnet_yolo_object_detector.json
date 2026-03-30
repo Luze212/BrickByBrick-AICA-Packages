@@ -1,0 +1,65 @@
+{
+  "name": "YOLO Object Detector",
+  "description": {
+    "brief": "Erkennt Klötze im eingefrorenen Kamerabild und gibt 2D-Eckpunkte als flaches Array aus.",
+    "details": "Event-getriebener Block. Lädt das YOLOv11-OBB Modell einmalig beim Konfigurieren. Reagiert per user_callback auf jedes neue Bild von PoseTriggeredCamera. Filtert Erkennungen am Bildrand (< 5 px), extrahiert die 4 OBB-Eckpunkte und gibt sie als flaches double_array aus (Stride 8: [u1,v1,u2,v2,u3,v3,u4,v4,...]). Leitet Roboter- und Kamerapose synchron weiter. Setzt yolo_done_trigger für genau einen Taktzyklus auf True."
+  },
+  "registration": "brickbybrick_sonnet::YoloObjectDetector",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Eingefrorenes Bild",
+      "description": "Synchron eingefrorener Snapshot von PoseTriggeredCamera. Löst Inferenz aus.",
+      "signal_name": "image_in",
+      "signal_type": "other",
+      "custom_signal_type": "state_representation::Image"
+    },
+    {
+      "display_name": "Ist-Pose (Roboter)",
+      "description": "Eingefrorene TCP-Pose von PoseTriggeredCamera. Wird synchron weitergeleitet.",
+      "signal_name": "ist_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Ist-Pose (Kamera)",
+      "description": "Eingefrorene Kamerapose von PoseTriggeredCamera. Wird synchron weitergeleitet.",
+      "signal_name": "cam_ist_pose_in",
+      "signal_type": "cartesian_pose"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "YOLO Eckpunkte",
+      "description": "Flaches Array der 2D-Eckpunkte aller erkannten Klötze. Stride 8: [u1,v1,u2,v2,u3,v3,u4,v4,...]. Leer wenn keine Klötze gefunden.",
+      "signal_name": "yolo_corners_list",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Ist-Pose (Roboter, durchgereicht)",
+      "description": "Synchron weitergeleitete TCP-Pose. Gleicher Zeitstempel wie das Bild.",
+      "signal_name": "ist_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Ist-Pose (Kamera, durchgereicht)",
+      "description": "Synchron weitergeleitete Kamerapose. Gleicher Zeitstempel wie das Bild.",
+      "signal_name": "cam_ist_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "YOLO fertig (Trigger)",
+      "description": "Puls-Signal: True für genau einen Taktzyklus nach abgeschlossener Inferenz. Wird von DropoffLineExtractor und MasterListManager als Event-Trigger verwendet.",
+      "signal_name": "yolo_done_trigger",
+      "signal_type": "bool"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Modellpfad",
+      "description": "Pfad zur trainierten YOLOv11-OBB Gewichtsdatei (.pt). Kann zur Laufzeit geändert werden (erfordert Re-Konfiguration).",
+      "parameter_name": "model_path",
+      "parameter_type": "string",
+      "default_value": "source/sonnet_small/model/best.pt"
+    }
+  ]
+}

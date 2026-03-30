@@ -1,0 +1,69 @@
+{
+  "name": "Pose Triggered Camera",
+  "description": {
+    "brief": "Schießt einen synchron eingefrorenen Snapshot nach einem konfigurierbaren Settling-Delay.",
+    "details": "Wartet auf take_img=True UND trajectory_success=True, pausiert dann 0,3 s (Vibrations-Settling), und friert dann Bild, Roboter-Ist-Pose und Kamera-Ist-Pose synchron als Deep-Copy ein. Bestätigt den Snapshot per img_taken=True. Resettet img_taken automatisch, sobald trajectory_success wieder auf False fällt (Roboter abgefahren). Bricht den laufenden Delay sofort ab, falls der Roboter während der Wartezeit weggefahren wird."
+  },
+  "registration": "brickbybrick_sonnet::PoseTriggeredCamera",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Bild aufnehmen",
+      "description": "Trigger-Signal vom ExplorationNavigator oder PickPlaceController.",
+      "signal_name": "take_img",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Trajektorie erfolgreich",
+      "description": "Bestätigung, dass der Roboter innerhalb 2 mm der Zielpose steht.",
+      "signal_name": "trajectory_success",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Ist-Pose (Roboter)",
+      "description": "Aktuelle TCP-Pose des Roboters. Wird beim Snapshot eingefroren.",
+      "signal_name": "ist_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Ist-Pose (Kamera)",
+      "description": "Aktuelle Kamerapose im Weltframe (fest im URDF). Wird beim Snapshot eingefroren.",
+      "signal_name": "cam_ist_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Bild-Stream",
+      "description": "Kontinuierlicher Bilddatenstrom der Kamera. Wird nur zum Snapshot-Zeitpunkt kopiert.",
+      "signal_name": "image_stream",
+      "signal_type": "other",
+      "custom_signal_type": "state_representation::Image"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Bild aufgenommen",
+      "description": "Handshake-Signal: True nach erfolgreichem Snapshot, False nach Roboter-Abfahrt.",
+      "signal_name": "img_taken",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Eingefrorene Ist-Pose (Roboter)",
+      "description": "Snapshot der TCP-Pose zum exakten Aufnahmezeitpunkt.",
+      "signal_name": "ist_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Eingefrorene Ist-Pose (Kamera)",
+      "description": "Snapshot der Kamerapose zum exakten Aufnahmezeitpunkt.",
+      "signal_name": "cam_ist_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Eingefrorenes Bild",
+      "description": "Deep-Copy des Bildes zum exakten Aufnahmezeitpunkt.",
+      "signal_name": "image_out",
+      "signal_type": "other",
+      "custom_signal_type": "state_representation::Image"
+    }
+  ]
+}

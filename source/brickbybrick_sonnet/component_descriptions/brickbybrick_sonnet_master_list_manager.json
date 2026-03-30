@@ -1,0 +1,73 @@
+{
+  "name": "Master List Manager",
+  "description": {
+    "brief": "Geometrische Berechnungen (Pixel→3D), Twist-Minimierung und Klotz-Filterung.",
+    "details": "Event-getriebener DataHandler. Empfängt YOLO-Eckpunkte (via yolo_done_trigger) und berechnet für jeden Klotz: Diagonalschnittpunkt (u/v-Center), Polygonfläche (Shoelace), Kantenwinkel, optimalen Greif-Yaw (Twist-Minimierung) und 3D-Weltkoordinaten (Platzhalter: Pinhole-Projektion + Strahl-Tisch-Schnitt). Das Ergebnis wird als filtered_yolo (Stride 9) ausgegeben – gefiltert um Klötze auf Ablagepositionen. filtered_yolo wird bei JEDER neuen YOLO-Inferenz überschrieben (Closed-Loop-Mechanismus). master_overview wird nur in Phase 1 (trigger_ppl=False) befüllt. master_dropoff wird übernommen wenn die neue line_ex_list länger ist."
+  },
+  "registration": "brickbybrick_sonnet::MasterListManager",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "YOLO fertig (Trigger)",
+      "description": "Puls-Signal von YoloObjectDetector. Steigende Flanke löst Geometrie-Berechnung und Neubefüllung von filtered_yolo aus.",
+      "signal_name": "yolo_done_trigger",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "YOLO Eckpunkte",
+      "description": "Flaches Array der 2D-Eckpunkte aller erkannten Klötze. Stride 8: [u1,v1,u2,v2,u3,v3,u4,v4,...]. Synchron mit yolo_done_trigger.",
+      "signal_name": "yolo_corners_list_in",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Ablage-Posen (vom Linien-Extraktor)",
+      "description": "Flaches Array aller 3D-Ablageposen vom DropoffLineExtractor. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird übernommen wenn länger als bisherige master_dropoff.",
+      "signal_name": "line_ex_list_in",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Ist-Pose (Roboter-TCP)",
+      "description": "TCP-Pose des Roboters im Weltframe, synchron weitergeleitet vom YoloObjectDetector.",
+      "signal_name": "ist_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Ist-Pose (Kamera)",
+      "description": "Kamerapose im Weltframe, synchron weitergeleitet vom YoloObjectDetector. Wird für die 3D-Rückprojektion benötigt.",
+      "signal_name": "cam_ist_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "PPL-Trigger",
+      "description": "Phase-2-Signal vom ExplorationNavigator. Wenn True, wird master_overview nicht mehr erweitert. filtered_yolo wird weiterhin bei jeder YOLO-Inferenz aktualisiert.",
+      "signal_name": "trigger_ppl",
+      "signal_type": "bool"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Übersichts-Posen (Master Overview)",
+      "description": "TCP-Posen aller Kameraaufnahmen aus Phase 1. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird nur in Phase 1 befüllt. Vom PickPlaceController als Fahrplan verwendet.",
+      "signal_name": "master_overview",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Ablage-Positionen (Master Dropoff)",
+      "description": "3D-TCP-Ablageposen für den Roboter. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird vom DropoffLineExtractor übernommen sobald eine vollständigere Liste vorliegt.",
+      "signal_name": "master_dropoff",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Gefilterte Klotz-Posen (Filtered YOLO)",
+      "description": "3D-Greifposen aller sichtbaren Klötze, die nicht auf Ablagepositionen liegen. Stride 9: [X,Y,Area,u_center,v_center,Qx,Qy,Qz,Qw,...]. Wird bei jeder YOLO-Inferenz überschrieben (Live-Output).",
+      "signal_name": "filtered_yolo",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "MLM fertig (Stafetten-Trigger)",
+      "description": "1-Takt-Puls (True→False) nach Abschluss der YOLO-Geometrie-Berechnung. Garantiert dem PickPlaceController, dass filtered_yolo bereits aktualisiert ist, bevor er es liest.",
+      "signal_name": "mlm_done_trigger",
+      "signal_type": "bool"
+    }
+  ]
+}

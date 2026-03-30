@@ -1,1 +1,4 @@
-# list any python requirements
+numpy
+scipy
+pyyaml
+ultralytics

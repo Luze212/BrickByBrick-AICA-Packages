@@ -1,0 +1,70 @@
+{
+  "name": "Exploration Navigator",
+  "description": {
+    "brief": "Fährt Explorationsposen ab und leitet im Gateway-Modus PPL-Kommandos weiter.",
+    "details": "Phase 1 (EXPLORATION): Liest Posen aus ExplCords.yaml und fährt sie der Reihe nach ab. Bei Zielerreichung (< 2 mm) wird ein Kamera-Handshake durchgeführt (take_img_out → img_taken). Nach Abschluss aller Posen wird trigger_ppl gesetzt. Phase 2 (GATEWAY): Leitet target_pose_in und take_img_in des PickPlaceControllers 1:1 weiter und berechnet weiterhin trajectory_success."
+  },
+  "registration": "brickbybrick_sonnet::ExplorationNavigator",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Ist-Pose",
+      "description": "Aktuelle TCP-Pose des Roboters im Weltkoordinatensystem.",
+      "signal_name": "ist_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Zielpose (PPL)",
+      "description": "Zielpose vom PickPlaceController. Wird nur im GATEWAY-Modus weitergeleitet.",
+      "signal_name": "target_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Bild aufnehmen (PPL)",
+      "description": "Kamera-Trigger vom PickPlaceController. Wird nur im GATEWAY-Modus weitergeleitet.",
+      "signal_name": "take_img_in",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Bild aufgenommen",
+      "description": "Bestätigung der PoseTriggeredCamera, dass der Snapshot gemacht wurde (Handshake).",
+      "signal_name": "img_taken",
+      "signal_type": "bool"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Zielpose",
+      "description": "Zielpose an den Roboter-Controller. In Phase 1: nächste Explorationspose. In Phase 2: durchgereichte PPL-Pose.",
+      "signal_name": "target_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Bild aufnehmen",
+      "description": "Kamera-Trigger an PoseTriggeredCamera. In Phase 1: von der internen Logik gesetzt. In Phase 2: durchgereicht vom PPL.",
+      "signal_name": "take_img_out",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Trajektorie erfolgreich",
+      "description": "True, wenn der TCP sich innerhalb von 2 mm der aktuellen Zielpose befindet.",
+      "signal_name": "trajectory_success",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "PPL-Trigger",
+      "description": "Wird einmalig True gesetzt, wenn alle Explorationsposen abgefahren wurden. Bleibt dauerhaft True.",
+      "signal_name": "trigger_ppl",
+      "signal_type": "bool"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Explorationsposen-Pfad",
+      "description": "Pfad zur YAML-Datei mit den Explorationsposen (ExplCords.yaml). Kann zur Laufzeit neu konfiguriert werden (erfordert Re-Konfiguration des Lifecycle).",
+      "parameter_name": "expl_coords_path",
+      "parameter_type": "string",
+      "default_value": "source/sonnet_small/exploration/ExplCords.yaml"
+    }
+  ]
+}
