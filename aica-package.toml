@@ -1,0 +1,44 @@
+#syntax=ghcr.io/aica-technology/package-builder:v1.4.0
+
+[metadata]
+version = "0.0.1"
+## add a description of the AICA package
+# description = "My custom package"
+
+## a metadata name for the collection is required when bundling multiple packages together.
+## the collection name should be formatted like a Docker image name,
+## and the ROS equivalent collection name must be formatted in lower_snake_case
+# [metadata.collection]
+# name = ""
+# ros-name = ""
+
+[build]
+type = "ros"
+image = "v2.0.5-jazzy"
+
+[build.cmake-args]
+## add any cmake args here, e.g.
+# SOME_FLAG = "ON"
+## you can override them in the CLI with `--build-arg config.build.cmake_args.SOME_FLAG=OFF`
+
+[build.dependencies]
+"@aica/foss/control-libraries" = "v9.2.0"
+"@aica/foss/modulo" = "v5.2.2"
+
+[build.packages.brickbybrick-sonnet]
+source = "./source/brickbybrick_sonnet"
+
+## add any required apt dependencies for the custom component.
+## these packages will be available during the build but also in the final image,
+## so they are useful for dynamic libraries
+# [build.packages.brickbybrick-sonnet.dependencies.apt]
+# libyaml-cpp-dev = "*"
+
+## by default, we will install any pip packages in `${package_source}/requirements.txt`
+## but you can customize the name of the requirements file, e.g.
+# [build.packages.brickbybrick-sonnet.dependencies.pip]
+# file = "custom_requirements.txt"
+
+## otherwise you can specify the pip packages directly
+# [build.packages.brickbybrick-sonnet.dependencies.pip.packages]
+# numpy = "1.0.0"
