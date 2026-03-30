@@ -51,6 +51,19 @@ Jede Python-Komponente benötigt zwingend eine `.json`-Datei im Ordner `componen
   "custom_signal_type": "state_representation::Image"
 
 
+## 5. Strikte Datei- und Verzeichnisstruktur (Ament Build System)
+**WICHTIG:** Das Paket wird über das ROS 2 Ament Build System gebaut. Die Platzierung der Konfigurationsdateien ist absolut strikt und darf nicht variiert werden!
+
+* **Das Root-Verzeichnis:** Die Dateien `CMakeLists.txt`, `package.xml`, `setup.cfg`, `aica-package.toml` und (falls vorhanden) `requirements.txt` MÜSSEN zwingend auf der obersten Ebene des Pakets (Root-Verzeichnis) liegen. Lege diese Dateien **niemals** in Unterordner wie `src/`, `source/` oder den Python-Modul-Ordner.
+* **Der Python-Modul-Ordner:** Alle Python-Komponenten (`.py`-Dateien) müssen in einem Unterordner liegen, der exakt denselben Namen trägt wie das Paket selbst (z.B. `packagename/packagename/meine_komponente.py`).
+
+## 6. CMakeLists.txt Anti-Patterns (Verbotene Befehle)
+* **Keine fiktiven Makros:** Erfinde unter keinen Umständen eigene AICA-spezifische CMake-Makros. 
+* **Verboten:** Befehle wie `include(InstallAicaDescriptions)` oder `install_aica_descriptions(...)` existieren nicht und führen unweigerlich zu Build-Fehlern.
+* **Erlaubt (Best Practice):** Um den Ordner mit den JSON-Beschreibungen zu installieren, nutze ausschließlich den nativen CMake-Befehl: 
+  `install(DIRECTORY ./component_descriptions DESTINATION .)`
+
+
 ## AICA SDK — Technische Referenz
 
 ### Paketstruktur (Component Package)
