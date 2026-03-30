@@ -23,6 +23,12 @@ Ein AICA-Programm besteht aus Blöcken (Komponenten), die über grafische Kabel 
     * *Bilder:* `sr.Image()`
     * *Listen/Arrays:* Einfache Python `list` (wird in AICA intern als `double_array` behandelt).
 
+Objekte kopieren (Achtung C++ Bindings!): Verwende niemals copy.deepcopy() für state_representation Objekte (wie sr.Image oder sr.CartesianPose). Dies führt aufgrund der C++ Bindings im Hintergrund zu Fehlern. Nutze stattdessen immer den Klon-/Copy-Konstruktor der Klasse:
+
+    Richtig: neue_pose = sr.CartesianPose(alte_pose)
+
+    Richtig: neues_bild = sr.Image(altes_bild)
+
 ---
 
 ## 3. Ausführungsmodelle (Callbacks)
@@ -54,7 +60,6 @@ Jede Python-Komponente benötigt zwingend eine `.json`-Datei im Ordner `componen
 ## 5. Strikte Datei- und Verzeichnisstruktur (Ament Build System)
 **WICHTIG:** Das Paket wird über das ROS 2 Ament Build System gebaut. Die Platzierung der Konfigurationsdateien ist absolut strikt und darf nicht variiert werden!
 
-* **Das Root-Verzeichnis:** Die Dateien `CMakeLists.txt`, `package.xml`, `setup.cfg`, `aica-package.toml` und (falls vorhanden) `requirements.txt` MÜSSEN zwingend auf der obersten Ebene des Pakets (Root-Verzeichnis) liegen. Lege diese Dateien **niemals** in Unterordner wie `src/`, `source/` oder den Python-Modul-Ordner.
 * **Der Python-Modul-Ordner:** Alle Python-Komponenten (`.py`-Dateien) müssen in einem Unterordner liegen, der exakt denselben Namen trägt wie das Paket selbst (z.B. `packagename/packagename/meine_komponente.py`).
 
 ## 6. CMakeLists.txt Anti-Patterns (Verbotene Befehle)
