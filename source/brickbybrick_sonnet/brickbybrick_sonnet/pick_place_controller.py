@@ -29,21 +29,25 @@ Sub-Zustände (self._sub_state):
   EXECUTE_PLACE:   APPROACH_DROP → RELEASE_DELAY → APPROACH_RETRACT
 """
 
+import numpy as np
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
 from std_msgs.msg import Bool, Float64MultiArray
+from brickbybrick_sonnet.geometry_utils import depth_to_world_z
 
 
-# ── Hardware-Konstanten (TO-DO: nach KUKA-Inbetriebnahme verifizieren) ────────
-_HOVER_HEIGHT_M = 0.10     # Hover-Abstand über Klotz/Ablage in Metern
-_Z_SAUGER_M     = 0.05     # Länge des Saugnapf-Aufsatzes vom TCP in Metern
+# ── Hardware-Konstanten ───────────────────────────────────────────────────────
+# !! Hover-Höhe: aktuell 15 cm – nach erstem Testlauf am KUKA anpassen !!
+_HOVER_HEIGHT_M = 0.15     # Hover-Abstand über Klotz/Ablage in Metern
+# TCP = Saugnapf-Kontaktpunkt (mit Anschlag bereits eingerechnet) → kein Offset
+_Z_SAUGER_M     = 0.0
 _Z_PICK_DEFAULT = 0.02     # Fallback Pick-Höhe bis Tiefenkamera kalibriert ist
 
-# Hardcodierte Home-Pose (TO-DO: Koordinaten nach KUKA-Inbetriebnahme eintragen)
-_HOME_POSITION    = [0.0, 0.0, 0.50]      # [X, Y, Z] in Meter
-_HOME_ORIENTATION = [0.0, 0.0, 0.0, 1.0]  # [Qx, Qy, Qz, Qw] – Identitätsquaternion
+# Home-Pose = frame3 aus ExplCords.yaml
+_HOME_POSITION    = [0.295, 0.0, 0.57]    # [X, Y, Z] in Meter
+_HOME_ORIENTATION = [0.0, 1.0, 0.0, 0.0]  # [Qx, Qy, Qz, Qw]
 
 
 class PickPlaceController(LifecycleComponent):
@@ -75,6 +79,21 @@ class PickPlaceController(LifecycleComponent):
 
         self._depth_image = sr.Image()
         self.add_input("depth_image", "_depth_image", EncodedState)
+
+        self._cam_ist_pose = sr.CartesianPose("cam_ist_pose", "world")
+        self.add_input("cam_ist_pose", "_cam_ist_pose", EncodedState)
+
+        # ── Kamera-Linsenparameter (für depth_to_world_z) ─────────────────────
+        # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]  – D435i 640×480
+        # !! Bei Auflösungswechsel anpassen (exakte Werte: RealSense Viewer → Intrinsics) !!
+        self._cam_fx = sr.Parameter("cam_fx", 322.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_fx", "Linsenparameter fx [px] – D435i 640×480 (K[0,0])")
+        self._cam_fy = sr.Parameter("cam_fy", 322.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_fy", "Linsenparameter fy [px] – D435i 640×480 (K[1,1])")
+        self._cam_cx = sr.Parameter("cam_cx", 320.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_cx", "Linsenparameter cx [px] – Bildmitte horizontal 640/2 (K[0,2])")
+        self._cam_cy = sr.Parameter("cam_cy", 240.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_cy", "Linsenparameter cy [px] – Bildmitte vertikal 480/2 (K[1,2])")
 
         # ── Outputs ───────────────────────────────────────────────────────────
         self._target_pose_out = sr.CartesianPose("target_pose_out", "world")
@@ -242,11 +261,6 @@ class PickPlaceController(LifecycleComponent):
         if overview_ok and dropoff_ok:
             self._transition("MOVE_OVERVIEW")
         else:
-            # Fix M-3: Wechsel in Terminal-Zustand statt Log-Spam bei 50 Hz
-            # ══════════════════════════════════════════════════════════════════
-            # TO-DO: Home-Pose – Koordinaten nach KUKA-Inbetriebnahme eintragen
-            # Aktuelle Werte in _HOME_POSITION / _HOME_ORIENTATION sind Platzhalter!
-            # ══════════════════════════════════════════════════════════════════
             self._target_pose_out.set_position(_HOME_POSITION)
             self._target_pose_out.set_orientation(_HOME_ORIENTATION)
             reason = "Keine Übersichtsposen" if not overview_ok else "Keine Ablagepositionen"
@@ -321,38 +335,47 @@ class PickPlaceController(LifecycleComponent):
         quat = best_brick[5:9]  # [Qx, Qy, Qz, Qw]
 
         # ── Tiefenbild auswerten → Z_pick ────────────────────────────────────
-        # ══════════════════════════════════════════════════════════════════════
-        # TO-DO: Z_pick aus Tiefenbild berechnen
-        #
-        # Algorithmus:
-        #   depth_array = self._depth_image.get_data()   # numpy array (H×W)
-        #   u, v = int(round(u_c)), int(round(v_c))
-        #   patch = depth_array[max(0,v-2):v+3, max(0,u-2):u+3]
-        #   depth_m = float(np.median(patch))
-        #   self._z_pick = depth_to_world_z(u_c, v_c, depth_m, fx, fy, cx, cy, cam_pose)
-        #
-        # Benötigt: Kamerakalibrierung (fx, fy, cx, cy) und Kamerapose im
-        #           Weltframe. Bis dahin gilt der Fallback-Wert _Z_PICK_DEFAULT.
-        # ══════════════════════════════════════════════════════════════════════
-        self._z_pick = _Z_PICK_DEFAULT
-        self.get_logger().warn(
-            "PickPlaceController: WAIT_IMG_1 – Z_pick-Berechnung (TO-DO). "
-            f"Verwende Fallback: {self._z_pick} m."
-        )
+        depth_array = self._depth_image.get_data()
+        if depth_array is not None and depth_array.size > 0 and not self._cam_ist_pose.is_empty():
+            u_i = int(round(u_c))
+            v_i = int(round(v_c))
+            patch = depth_array[max(0, v_i - 2):v_i + 3, max(0, u_i - 2):u_i + 3]
+            raw_median = float(np.median(patch))
+            if raw_median > 0.0:
+                depth_m = raw_median / 1000.0   # uint16 mm → Meter
+                cam_pos  = list(self._cam_ist_pose.get_position())
+                cam_ori  = self._cam_ist_pose.get_orientation()
+                cam_quat = [float(cam_ori[0]), float(cam_ori[1]),
+                            float(cam_ori[2]), float(cam_ori[3])]
+                self._z_pick = depth_to_world_z(
+                    u_c, v_c, depth_m,
+                    self._cam_fx.get_value(), self._cam_fy.get_value(),
+                    self._cam_cx.get_value(), self._cam_cy.get_value(),
+                    cam_pos, cam_quat,
+                )
+                self.get_logger().info(
+                    f"PickPlaceController: WAIT_IMG_1 – Z_pick={self._z_pick:.4f} m "
+                    f"(depth_raw={raw_median:.0f} mm)."
+                )
+            else:
+                self._z_pick = _Z_PICK_DEFAULT
+                self.get_logger().warn(
+                    f"PickPlaceController: WAIT_IMG_1 – Tiefenpatch = 0, Fallback {self._z_pick} m."
+                )
+        else:
+            self._z_pick = _Z_PICK_DEFAULT
+            self.get_logger().warn(
+                f"PickPlaceController: WAIT_IMG_1 – Kein Tiefenbild/keine Kamerapose, "
+                f"Fallback {self._z_pick} m."
+            )
 
-        # ── Kamera-TCP-Offset: X/Y korrigieren ───────────────────────────────
-        # ══════════════════════════════════════════════════════════════════════
-        # TO-DO: Kamera-TCP-Versatz aufaddieren, damit der SAUGER (nicht
-        #        die Kamera) über dem Klotz zentriert ist.
-        #
-        # Voraussichtlicher Code:
-        #   from brickbybrick_sonnet.geometry_utils import camera_tcp_offset
-        #   X_hover, Y_hover = camera_tcp_offset(X_b, Y_b, cam_pose, tcp_pose)
-        #
-        # Benötigt: Verifizierter Kamera-Montageoffset aus KUKA-URDF.
-        # ══════════════════════════════════════════════════════════════════════
-        X_hover = X_b
-        Y_hover = Y_b
+        # TO-DO: Kamera-TCP-Versatz aufaddieren (nach Einmessung von _CAM_OFFSET_XYZ).
+        # Damit fährt die Kamera (nicht der Sauger) über den Klotz, sodass
+        # WAIT_IMG_2 ein zentriertes Nahbild liefert.
+        # Korrektur: X_hover = X_b - R_tcp * _CAM_OFFSET_XYZ[0]
+        #            Y_hover = Y_b - R_tcp * _CAM_OFFSET_XYZ[1]
+        X_hover = X_b   # ← TO-DO: Kameraversatz eintragen sobald eingemessen
+        Y_hover = Y_b   # ← TO-DO: Kameraversatz eintragen sobald eingemessen
 
         # Hover-Pose setzen und weiterfahren
         hover_z = self._z_pick + _HOVER_HEIGHT_M
@@ -415,25 +438,40 @@ class PickPlaceController(LifecycleComponent):
         v_c    = best_brick[4]
         quat   = best_brick[5:9]  # [Qx, Qy, Qz, Qw]
 
-        # ── Fix M-5: Z_pick aus frischem Tiefenbild aktualisieren ─────────────
-        # ══════════════════════════════════════════════════════════════════════
-        # TO-DO: Z_pick aus dem nahen Hover-Tiefenbild neu berechnen
-        #
-        # Algorithmus (analog zu WAIT_IMG_1):
-        #   depth_array = self._depth_image.get_data()
-        #   u, v = int(round(u_c)), int(round(v_c))
-        #   patch = depth_array[max(0,v-2):v+3, max(0,u-2):u+3]
-        #   depth_m = float(np.median(patch))
-        #   self._z_pick = depth_to_world_z(u_c, v_c, depth_m, fx, fy, cx, cy, cam_pose)
-        #
-        # Hinweis: Das Hover-Bild ist deutlich näher als das Overview-Bild und
-        #          liefert eine präzisere Tiefenmessung. Bis die Kalibrierung
-        #          steht, verwenden wir den Fallback (ggf. überschrieben aus WAIT_IMG_1).
-        # ══════════════════════════════════════════════════════════════════════
-        self.get_logger().warn(
-            "PickPlaceController: WAIT_IMG_2 – Z_pick-Erneuerung (TO-DO). "
-            f"Aktueller Wert: {self._z_pick} m."
-        )
+        # ── Fix M-5: Z_pick aus frischem Hover-Tiefenbild aktualisieren ─────────
+        # Das Hover-Bild ist deutlich näher → präzisere Tiefenmessung.
+        depth_array = self._depth_image.get_data()
+        if depth_array is not None and depth_array.size > 0 and not self._cam_ist_pose.is_empty():
+            u_i = int(round(u_c))
+            v_i = int(round(v_c))
+            patch = depth_array[max(0, v_i - 2):v_i + 3, max(0, u_i - 2):u_i + 3]
+            raw_median = float(np.median(patch))
+            if raw_median > 0.0:
+                depth_m = raw_median / 1000.0   # uint16 mm → Meter
+                cam_pos  = list(self._cam_ist_pose.get_position())
+                cam_ori  = self._cam_ist_pose.get_orientation()
+                cam_quat = [float(cam_ori[0]), float(cam_ori[1]),
+                            float(cam_ori[2]), float(cam_ori[3])]
+                self._z_pick = depth_to_world_z(
+                    u_c, v_c, depth_m,
+                    self._cam_fx.get_value(), self._cam_fy.get_value(),
+                    self._cam_cx.get_value(), self._cam_cy.get_value(),
+                    cam_pos, cam_quat,
+                )
+                self.get_logger().info(
+                    f"PickPlaceController: WAIT_IMG_2 – Z_pick={self._z_pick:.4f} m "
+                    f"(depth_raw={raw_median:.0f} mm)."
+                )
+            else:
+                self.get_logger().warn(
+                    f"PickPlaceController: WAIT_IMG_2 – Tiefenpatch = 0, "
+                    f"behalte Z_pick={self._z_pick:.4f} m aus WAIT_IMG_1."
+                )
+        else:
+            self.get_logger().warn(
+                f"PickPlaceController: WAIT_IMG_2 – Kein Tiefenbild/keine Kamerapose, "
+                f"behalte Z_pick={self._z_pick:.4f} m aus WAIT_IMG_1."
+            )
 
         # ── Pick-Pose und Retract-Pose generieren ─────────────────────────────
         z_pick    = self._z_pick

@@ -21,6 +21,7 @@ find_package(ament_cmake_python REQUIRED)
 ament_auto_find_build_dependencies()
 
 install(DIRECTORY ./component_descriptions DESTINATION .)
+install(DIRECTORY ./data DESTINATION share/${PROJECT_NAME})
 
 # install Python modules
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})

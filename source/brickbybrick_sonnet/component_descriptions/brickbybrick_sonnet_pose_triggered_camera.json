@@ -2,7 +2,7 @@
   "name": "Pose Triggered Camera",
   "description": {
     "brief": "Schießt einen synchron eingefrorenen Snapshot nach einem konfigurierbaren Settling-Delay.",
-    "details": "Wartet auf take_img=True UND trajectory_success=True, pausiert dann 0,3 s (Vibrations-Settling), und friert dann Bild, Roboter-Ist-Pose und Kamera-Ist-Pose synchron als Deep-Copy ein. Bestätigt den Snapshot per img_taken=True. Resettet img_taken automatisch, sobald trajectory_success wieder auf False fällt (Roboter abgefahren). Bricht den laufenden Delay sofort ab, falls der Roboter während der Wartezeit weggefahren wird."
+    "details": "Wartet auf take_img=True UND trajectory_success=True, pausiert dann 0,3 s (Vibrations-Settling), und friert dann Bild und Roboter-Ist-Pose synchron als Deep-Copy ein. Die Kamerapose wird aus der TCP-Pose über eine fest hinterlegte TCP→Kamera-Transformationsmatrix berechnet (Platzhalter: _CAM_OFFSET_XYZ / _CAM_OFFSET_QUAT in pose_triggered_camera.py). Bestätigt den Snapshot per img_taken=True. Resettet img_taken automatisch, sobald trajectory_success wieder auf False fällt."
   },
   "registration": "brickbybrick_sonnet::PoseTriggeredCamera",
   "inherits": "modulo_components::LifecycleComponent",
@@ -23,12 +23,6 @@
       "display_name": "Ist-Pose (Roboter)",
       "description": "Aktuelle TCP-Pose des Roboters. Wird beim Snapshot eingefroren.",
       "signal_name": "ist_pose_in",
-      "signal_type": "cartesian_pose"
-    },
-    {
-      "display_name": "Ist-Pose (Kamera)",
-      "description": "Aktuelle Kamerapose im Weltframe (fest im URDF). Wird beim Snapshot eingefroren.",
-      "signal_name": "cam_ist_pose_in",
       "signal_type": "cartesian_pose"
     },
     {

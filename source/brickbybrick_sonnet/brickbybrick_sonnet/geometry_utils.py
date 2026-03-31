@@ -8,18 +8,18 @@ Implementiert:
   - yaw_from_quaternion        : Quaternion → Yaw-Winkel (Z-Rotation, Radiant)
   - minimize_twist             : Optimaler Greif-Yaw bei 180°-symmetrischem Klotz
   - gauss_shoelace_area        : Polygonfläche via Gaußsche Trapezformel
-
-Platzhalter (TO-DO, physikalische Parameter noch offen):
   - pinhole_ray                : Pixel → normalisierter 3D-Sichtstrahl (Kameraframe)
   - ray_table_intersect        : Strahl + Kamerapose → Weltkoordinaten (X, Y)
+
+Platzhalter (TO-DO, physikalische Parameter noch offen):
   - depth_to_world_z           : Tiefenbild-Pixel → Weltkoordinaten Z_pick
-  - camera_tcp_offset          : Kamera-TCP-Versatz-Korrektur für Hover-Pose
 
 WICHTIG: Diese Datei ist KEINE AICA-Komponente und darf NICHT in setup.cfg
          oder einer component_descriptions/*.json registriert werden.
 """
 
 import math
+import numpy as np
 from scipy.spatial.transform import Rotation
 
 
@@ -128,105 +128,96 @@ def pinhole_ray(u: float, v: float,
                 fx: float, fy: float, cx: float, cy: float) -> list:
     """
     Wandelt eine Pixelkoordinate in einen normalisierten 3D-Sichtstrahl
-    im Kamera-Koordinatensystem um.
+    im Kamera-Koordinatensystem um (Standard-Pinhole-Projektion).
 
-    ══════════════════════════════════════════════════════════════════════════
-    TO-DO: Pinhole-Kamera-Projektion
-    Input:  Pixelkoordinate (u, v), Kameramatrix (fx, fy, cx, cy)
-    Output: Normalisierter Richtungsvektor im Kameraframe [dx, dy, dz]
-            Voraussichtliche Formel:
-                dx = (u - cx) / fx
-                dy = (v - cy) / fy
-                dz = 1.0
-                → normalisieren: ray / ||ray||
-    Benötigt: Verifizierte Kamerakalibrierungswerte (aus ROS camera_info Topic)
-    ══════════════════════════════════════════════════════════════════════════
+    Kamera-Frame-Konvention (ROS / RealSense): X rechts, Y nach unten, Z in
+    Blickrichtung (optische Achse).
+
+    Args:
+        u, v:       Pixelkoordinate im Bild (Spalte, Zeile)
+        fx, fy:     Brennweiten in Pixel  ← auflösungsabhängig, siehe MLM-Parameter
+        cx, cy:     Hauptpunkt in Pixel   ← auflösungsabhängig, siehe MLM-Parameter
+
+    Returns:
+        Normalisierter Richtungsvektor [dx, dy, dz] im Kamera-Frame
     """
-    raise NotImplementedError(
-        "TO-DO: pinhole_ray – Kamerakalibrierung (fx, fy, cx, cy) noch nicht vermessen."
-    )
+    dx = (u - cx) / fx
+    dy = (v - cy) / fy
+    dz = 1.0
+    norm = math.sqrt(dx * dx + dy * dy + dz * dz)
+    return [dx / norm, dy / norm, dz / norm]
 
 
-def ray_table_intersect(ray_cam: list, cam_pose, z_table: float) -> tuple:
+def ray_table_intersect(ray_cam: list,
+                        cam_pos: list, cam_quat: list,
+                        z_table: float) -> tuple:
     """
     Berechnet den Schnittpunkt eines Kamera-Sichtstrahls mit der Tischebene
-    und gibt die echten Weltkoordinaten (X, Y) zurück.
+    (Z = z_table im Weltframe) und gibt die Weltkoordinaten (X, Y) zurück.
 
-    ══════════════════════════════════════════════════════════════════════════
-    TO-DO: Strahl-Ebenen-Schnitt (Kamera → Weltkoordinaten)
-    Input:  ray_cam   – normalisierter Sichtstrahl im Kameraframe (3-Liste)
-            cam_pose  – sr.CartesianPose der Kamera im Weltframe
-            z_table   – Tischhöhe in Weltkoordinaten (Hardware-Parameter)
-    Output: (X_welt, Y_welt) – Schnittpunkt mit Z = z_table
     Algorithmus:
-        1. Rotation der Kamera aus cam_pose als Rotationsmatrix extrahieren
-        2. ray_welt = R_cam_to_world @ ray_cam
-        3. Parametergleichung: P = cam_pos + t * ray_welt
-        4. Löse nach t auf: t = (z_table - cam_pos.z) / ray_welt.z
-        5. X = cam_pos.x + t * ray_welt.x
-           Y = cam_pos.y + t * ray_welt.y
-    Benötigt: Verifizierte Kamera-URDF-Montagepose (cam_pose aus URDF/TF)
-    ══════════════════════════════════════════════════════════════════════════
+        1. Strahl in Weltframe rotieren: ray_world = R(cam_quat) @ ray_cam
+        2. Parametergleichung: P = cam_pos + t * ray_world
+        3. t = (z_table - cam_pos.z) / ray_world.z
+        4. X = cam_pos.x + t * ray_world.x
+           Y = cam_pos.y + t * ray_world.y
+
+    Args:
+        ray_cam:   Normalisierter Sichtstrahl im Kamera-Frame [dx, dy, dz]
+        cam_pos:   Kameraposition im Weltframe [x, y, z]
+        cam_quat:  Kameraquaternion im Weltframe [qx, qy, qz, qw]
+        z_table:   Tischhöhe im Weltframe [m]  ← gemessen 170 mm, bei Umbau anpassen
+
+    Returns:
+        (X_welt, Y_welt) – Schnittpunkt mit der Tischebene.
+        Falls der Strahl parallel zur Tischebene verläuft (ray_world.z ≈ 0),
+        wird (cam_pos.x, cam_pos.y) als Fallback zurückgegeben.
     """
-    raise NotImplementedError(
-        "TO-DO: ray_table_intersect – Tischhöhe (z_table) und Kamerapose-TF noch nicht verifiziert."
-    )
+    rot = Rotation.from_quat(cam_quat)          # [qx, qy, qz, qw]
+    ray_world = rot.apply(ray_cam).tolist()
+
+    ox, oy, oz = cam_pos
+    dx, dy, dz = ray_world
+
+    if abs(dz) < 1e-9:
+        # Strahl parallel zur Tischebene – kein sinnvoller Schnittpunkt
+        return (ox, oy)
+
+    t = (z_table - oz) / dz
+    return (ox + t * dx, oy + t * dy)
 
 
 def depth_to_world_z(u: float, v: float, depth_m: float,
                      fx: float, fy: float, cx: float, cy: float,
-                     cam_pose) -> float:
+                     cam_pos: list, cam_quat: list) -> float:
     """
-    Wandelt einen Tiefenbild-Pixel in die echte Höhe Z_pick im Weltkoordinatensystem.
+    Wandelt einen Tiefenbild-Pixel in die Höhe Z_pick im Weltkoordinatensystem.
 
-    Wird im PickPlaceController (WAIT_IMG_1) verwendet, um die exakte Pick-Höhe
-    eines Klotzes zu bestimmen.
+    Wird im PickPlaceController (WAIT_IMG_1 / WAIT_IMG_2) verwendet, um die
+    exakte Pick-Höhe eines Klotzes zu bestimmen.
 
-    ══════════════════════════════════════════════════════════════════════════
-    TO-DO: Tiefenbild → Weltkoordinate Z_pick
-    Input:  (u, v)    – Pixelkoordinate des Klotz-Zentrums
-            depth_m   – Tiefenwert in Metern (Median aus 5×5-Patch)
-            fx, fy, cx, cy – Kameramatrix (aus camera_info)
-            cam_pose  – sr.CartesianPose der Kamera im Weltframe
-    Output: Z_pick    – Höhe des Klotzes im Weltkoordinatensystem (Meter)
-    Algorithmus:
-        1. 3D-Punkt im Kameraframe:
-               X_cam = (u - cx) * depth_m / fx
-               Y_cam = (v - cy) * depth_m / fy
-               Z_cam = depth_m
-        2. Transformiere [X_cam, Y_cam, Z_cam] mit cam_pose ins Weltframe
-        3. Z_pick = transformierter Punkt.z
-    Benötigt: Verifizierte Kamerakalibrierung UND Montagepose
-    ══════════════════════════════════════════════════════════════════════════
+    Da die Kamera nicht senkrecht montiert ist, wird der vollständige 3D-Punkt
+    im Kamera-Frame rekonstruiert und anschließend in den Weltframe rotiert.
+
+    Tiefenformat: RealSense D435i liefert aligned-depth als uint16 in mm.
+    Der Aufrufer übergibt den bereits in Meter umgerechneten Medianwert.
+
+    Args:
+        u, v:       Pixelkoordinate des Klotz-Zentrums (aus YOLO)
+        depth_m:    Tiefenwert in Metern (Median aus 5×5-Patch, uint16 mm / 1000)
+        fx, fy:     Linsenparameter [px] – D435i 640×480: fx=322, fy=322
+        cx, cy:     Linsenparameter [px] – D435i 640×480: cx=320, cy=240
+        cam_pos:    Kamera-Weltpose – Position [x, y, z] im Weltframe
+        cam_quat:   Kamera-Weltpose – Orientierung [qx, qy, qz, qw] im Weltframe
+
+    Returns:
+        Z_pick – Höhe des Klotzes im Weltkoordinatensystem (Meter)
     """
-    raise NotImplementedError(
-        "TO-DO: depth_to_world_z – Format und Übertragung in Weltkoordinaten noch nicht vollständig geklärt."
-    )
+    X_cam = (u - cx) * depth_m / fx
+    Y_cam = (v - cy) * depth_m / fy
+    Z_cam = depth_m
+    rot = Rotation.from_quat(cam_quat)
+    point_world = rot.apply([X_cam, Y_cam, Z_cam]) + np.array(cam_pos)
+    return float(point_world[2])
 
 
-def camera_tcp_offset(x_world: float, y_world: float, cam_pose, tcp_pose) -> tuple:
-    """
-    Korrigiert eine berechnete Weltkoordinate vom Kamera-Frame auf den TCP-Frame.
-
-    Da die Kamera physisch versetzt vom TCP montiert ist, muss für die Hover-Pose
-    der Versatz so kompensiert werden, dass der SAUGER (TCP) über dem Klotz
-    zentriert ist, nicht die Kamera.
-
-    ══════════════════════════════════════════════════════════════════════════
-    TO-DO: Kamera-TCP-Versatz-Korrektur
-    Input:  x_world, y_world – berechnete Klotzposition im Weltframe
-            cam_pose         – sr.CartesianPose der Kamera im Weltframe
-            tcp_pose         – sr.CartesianPose des TCP im Weltframe (ist_pose)
-    Output: (x_korrigiert, y_korrigiert) – Position so, dass TCP über Klotz
-    Algorithmus:
-        offset_x = tcp_pose.position.x - cam_pose.position.x
-        offset_y = tcp_pose.position.y - cam_pose.position.y
-        x_korrigiert = x_world + offset_x
-        y_korrigiert = y_world + offset_y
-        (Annahme: Kamera ist fix im URDF relativ zum TCP montiert)
-    Benötigt: Verifizierter Kamera-Montageoffset aus URDF (KUKA-spezifisch)
-    ══════════════════════════════════════════════════════════════════════════
-    """
-    raise NotImplementedError(
-        "TO-DO: camera_tcp_offset – KUKA Kamera-Montageoffset noch nicht aus URDF vermessen."
-    )

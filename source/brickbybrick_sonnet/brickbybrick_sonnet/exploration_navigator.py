@@ -12,8 +12,17 @@ Phase 2 (GATEWAY):
 """
 
 import math
+import os
 import yaml
 import state_representation as sr
+
+try:
+    from ament_index_python.packages import get_package_share_directory as _get_share
+    _SHARE = _get_share("brickbybrick_sonnet")
+except Exception:
+    _SHARE = "."
+
+_DEFAULT_EXPL_PATH = os.path.join(_SHARE, "data", "exploration", "ExplCords.yaml")
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
@@ -28,7 +37,7 @@ class ExplorationNavigator(LifecycleComponent):
         # ── Parameter ─────────────────────────────────────────────────────────
         self._expl_coords_path = sr.Parameter(
             "expl_coords_path",
-            "source/sonnet_small/exploration/ExplCords.yaml",
+            _DEFAULT_EXPL_PATH,
             sr.ParameterType.STRING,
         )
         self.add_parameter(
@@ -69,6 +78,7 @@ class ExplorationNavigator(LifecycleComponent):
         self._state: str = "EXPLORATION"
         self._exploration_pose_list: list = []
         self._waiting_for_camera_reset: bool = False
+        self._phase_done_timer = None   # gesetzt wenn Liste leer wird
 
     # ─────────────────────────────────────────────────────────────────────────
     # Lifecycle-Callbacks
@@ -122,8 +132,7 @@ class ExplorationNavigator(LifecycleComponent):
         self._waiting_for_camera_reset = False
         self._trajectory_success = False
         self._trigger_ppl = False
-        self._waiting_for_final_handshake = False
-        self._final_handshake_seen_true = False
+        self._phase_done_timer = None
 
         # Fix L-3: target_pose_out auf leere/neutrale Pose zurücksetzen,
         # um "Geister-Bewegungen" beim Neustart zu verhindern.
@@ -160,39 +169,28 @@ class ExplorationNavigator(LifecycleComponent):
     # ─────────────────────────────────────────────────────────────────────────
 
     def _run_exploration_step(self):
-        # ── Liste erschöpft: warte auf letzten Kamera-Handshake ──────────────
-        # Fix H-2: Statt eines blinden 0,5-s-Timers warten wir darauf, dass
-        # img_taken ein letztes Mal True→False durchläuft (letzter Snapshot
-        # komplett verarbeitet), bevor wir trigger_ppl = True setzen.
+        # ── Liste erschöpft: 0,5-s-Timer für YOLO/MLM-Pipeline ──────────────
         if len(self._exploration_pose_list) == 0:
-            if not self._waiting_for_final_handshake:
-                self._waiting_for_final_handshake = True
-                self._final_handshake_seen_true = False
+            if self._phase_done_timer is None:
+                self._phase_done_timer = self.get_clock().now()
                 self.get_logger().info(
                     "ExplorationNavigator: Explorationsliste leer – "
-                    "warte auf letzten Kamera-Handshake (img_taken True→False)."
+                    "starte 0,5-s-Warten auf letzte YOLO/MLM-Verarbeitung."
                 )
-
-            # Phase 1: Warte auf img_taken == True (letzter Snapshot fertig)
-            if not self._final_handshake_seen_true:
-                if self._img_taken:
-                    self._final_handshake_seen_true = True
-                    self.get_logger().info(
-                        "ExplorationNavigator: Letzter Handshake – "
-                        "img_taken = True empfangen."
-                    )
                 return
 
-            # Phase 2: Warte auf img_taken == False (Handshake-Reset abgeschlossen)
-            if self._img_taken:
-                return  # Noch nicht zurückgefallen
+            elapsed = (
+                self.get_clock().now() - self._phase_done_timer
+            ).nanoseconds / 1e9
+            if elapsed < 0.5:
+                return
 
-            # Letzter Handshake komplett – GATEWAY aktivieren
+            # Timer abgelaufen – GATEWAY aktivieren
             self._trigger_ppl = True
             self._state = "GATEWAY"
             self.get_logger().info(
                 "ExplorationNavigator: ZUSTANDSWECHSEL EXPLORATION → GATEWAY. "
-                "Letzter Handshake abgeschlossen. trigger_ppl = True."
+                "trigger_ppl = True."
             )
             return
 

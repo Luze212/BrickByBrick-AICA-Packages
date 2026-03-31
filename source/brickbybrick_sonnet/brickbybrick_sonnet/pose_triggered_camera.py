@@ -12,11 +12,25 @@ Ablauf:
   5. Reset: sobald trajectory_success wieder False wird → img_taken = False
 """
 
+import numpy as np
+from scipy.spatial.transform import Rotation
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
 from std_msgs.msg import Bool
+
+
+# ── Kamera-Montage-Offset relativ zum TCP ─────────────────────────────────────
+# TO-DO: Werte nach Einmessung der Kameramontage am KUKA eintragen.
+#        Messverfahren: KUKA URDF (Tool-Frame → Kamera-Frame) oder
+#        direkte geometrische Vermessung am Aufbau.
+#
+# Translation: Versatz der Kamera vom TCP-Ursprung im TCP-Frame [m]
+_CAM_OFFSET_XYZ  = [0.0, 0.0, 0.0]       # [tx, ty, tz]  ← TO-DO einmessen
+#
+# Rotation: Verdrehung der Kamera relativ zur TCP-Ausrichtung [Qx, Qy, Qz, Qw]
+_CAM_OFFSET_QUAT = [0.0, 0.0, 0.0, 1.0]  # Identität (keine Verdrehung)  ← TO-DO einmessen
 
 
 class PoseTriggeredCamera(LifecycleComponent):
@@ -33,9 +47,6 @@ class PoseTriggeredCamera(LifecycleComponent):
 
         self._ist_pose_in = sr.CartesianPose("ist_pose_in", "world")
         self.add_input("ist_pose_in", "_ist_pose_in", EncodedState)
-
-        self._cam_ist_pose_in = sr.CartesianPose("cam_ist_pose_in", "world")
-        self.add_input("cam_ist_pose_in", "_cam_ist_pose_in", EncodedState)
 
         self._image_stream = sr.Image()
         self.add_input("image_stream", "_image_stream", EncodedState)
@@ -114,9 +125,24 @@ class PoseTriggeredCamera(LifecycleComponent):
 
                 if elapsed >= 0.3:
                     # ── Snapshot-Moment: Klon-Konstruktor für C++-gebundene Objekte ─
-                    self._image_out = sr.Image(self._image_stream)
+                    self._image_out    = sr.Image(self._image_stream)
                     self._ist_pose_out = sr.CartesianPose(self._ist_pose_in)
-                    self._cam_ist_pose_out = sr.CartesianPose(self._cam_ist_pose_in)
+
+                    # ── Kamerapose aus TCP-Pose + Montage-Offset berechnen ────────
+                    # cam_pos_world  = tcp_pos_world + R_tcp * _CAM_OFFSET_XYZ
+                    # cam_quat_world = q_tcp_world ⊗ _CAM_OFFSET_QUAT
+                    # TO-DO: _CAM_OFFSET_XYZ und _CAM_OFFSET_QUAT nach Einmessung befüllen
+                    tcp_pos  = np.array(self._ist_pose_in.get_position(), dtype=float)
+                    tcp_ori  = self._ist_pose_in.get_orientation()
+                    tcp_quat = [float(tcp_ori[0]), float(tcp_ori[1]),
+                                float(tcp_ori[2]), float(tcp_ori[3])]
+                    R_tcp = Rotation.from_quat(tcp_quat)
+                    cam_pos  = (tcp_pos + R_tcp.apply(_CAM_OFFSET_XYZ)).tolist()
+                    cam_quat = (R_tcp * Rotation.from_quat(_CAM_OFFSET_QUAT)).as_quat().tolist()
+                    self._cam_ist_pose_out = sr.CartesianPose("cam_ist_pose_out", "world")
+                    self._cam_ist_pose_out.set_position(cam_pos)
+                    self._cam_ist_pose_out.set_orientation(cam_quat)
+
                     self._img_taken = True
                     self._is_delaying = False
                     self._timer_start = None

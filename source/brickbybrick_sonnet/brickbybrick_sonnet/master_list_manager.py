@@ -30,6 +30,8 @@ from brickbybrick_sonnet.geometry_utils import (
     yaw_from_quaternion,
     minimize_twist,
     gauss_shoelace_area,
+    pinhole_ray,
+    ray_table_intersect,
 )
 
 
@@ -37,6 +39,28 @@ class MasterListManager(LifecycleComponent):
 
     def __init__(self, node_name: str, *args, **kwargs):
         super().__init__(node_name, *args, **kwargs)
+
+        # ── Parameter (Kamera-Intrinsics + Tischgeometrie) ───────────────────
+        # Kamera-Intrinsics für Intel RealSense D435i bei 640×480.
+        # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]
+        # !! Bei Auflösungswechsel müssen fx, fy, cx, cy neu gesetzt werden.  !!
+        # !! Exakte Werte: RealSense Viewer → Kamera → Info → Intrinsics      !!
+        self._cam_fx = sr.Parameter("cam_fx", 322.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_fx", "Linsenparameter fx [px] – D435i 640×480 (K[0,0])")
+
+        self._cam_fy = sr.Parameter("cam_fy", 322.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_fy", "Linsenparameter fy [px] – D435i 640×480 (K[1,1])")
+
+        self._cam_cx = sr.Parameter("cam_cx", 320.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_cx", "Linsenparameter cx [px] – Bildmitte horizontal 640/2 (K[0,2])")
+
+        self._cam_cy = sr.Parameter("cam_cy", 240.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_cam_cy", "Linsenparameter cy [px] – Bildmitte vertikal 480/2 (K[1,2])")
+
+        # !! Tischhöhe: gemessener Montagewert = 170 mm.                       !!
+        # !! Bei Umbau des Aufbaus (andere Tischhöhe) hier anpassen.           !!
+        self._z_table = sr.Parameter("z_table", 0.170, sr.ParameterType.DOUBLE)
+        self.add_parameter("_z_table", "Tischhöhe im Weltframe [m] – aktuell 170 mm, bei Umbau anpassen")
 
         # ── Inputs ────────────────────────────────────────────────────────────
         # yolo_done_trigger: Event-Trigger – user_callback prüft steigende Flanke
@@ -163,6 +187,26 @@ class MasterListManager(LifecycleComponent):
                 float(ori[0]), float(ori[1]), float(ori[2]), float(ori[3])
             )
 
+        # ── Kamera-Intrinsics und Tischhöhe einmalig aus Parametern lesen ────
+        # !! Bei Auflösungswechsel (z. B. 848×480) diese Parameter in AICA neu  !!
+        # !! konfigurieren – Werte aus: RealSense Viewer → Info → Intrinsics     !!
+        fx      = self._cam_fx.get_value()   # Brennweite X [px]
+        fy      = self._cam_fy.get_value()   # Brennweite Y [px]
+        cx      = self._cam_cx.get_value()   # Hauptpunkt X [px]
+        cy      = self._cam_cy.get_value()   # Hauptpunkt Y [px]
+        # !! Tischhöhe: 170 mm – bei Umbau des Aufbaus anpassen !!
+        z_table = self._z_table.get_value()  # Tischhöhe im Weltframe [m]
+
+        # Kamerapose einmalig für alle Klötze dieses Zyklus extrahieren
+        if cam_ist_pose is not None:
+            _cam_pos  = [float(v) for v in cam_ist_pose.get_position()]
+            _cam_ori  = cam_ist_pose.get_orientation()
+            _cam_quat = [float(_cam_ori[0]), float(_cam_ori[1]),
+                         float(_cam_ori[2]), float(_cam_ori[3])]
+        else:
+            _cam_pos  = None
+            _cam_quat = None
+
         # ── Geometrie-Berechnung für jeden Klotz (Stride 8) ──────────────────
         pending_bricks = []  # je Eintrag: [X, Y, Area, u_center, v_center, Qx, Qy, Qz, Qw]
 
@@ -185,21 +229,12 @@ class MasterListManager(LifecycleComponent):
             # Kantenwinkel der ersten Kante (Ausrichtung im 2D-Bild)
             theta = math.atan2(v2 - v1, u2 - u1)
 
-            # ══════════════════════════════════════════════════════════════════
-            # TO-DO: 3D-Projektion (Pinhole-Kamera + Strahl-Schnitt mit Tisch)
-            #
-            # Benötigt: Verifizierte Kamerakalibrierung (fx, fy, cx, cy) und
-            #           Tischhöhe (z_table) – aus KUKA URDF / ROS camera_info.
-            #
-            # Voraussichtlicher Code:
-            #   from brickbybrick_sonnet.geometry_utils import (
-            #       pinhole_ray, ray_table_intersect
-            #   )
-            #   ray = pinhole_ray(u_center, v_center, fx, fy, cx, cy)
-            #   X_klotz, Y_klotz = ray_table_intersect(ray, cam_ist_pose, z_table)
-            # ══════════════════════════════════════════════════════════════════
-            X_klotz = 0.0
-            Y_klotz = 0.0
+            # ── 3D-Projektion: Pixel-Center → Weltkoordinaten ─────────────────
+            ray = pinhole_ray(u_center, v_center, fx, fy, cx, cy)
+            if _cam_pos is not None:
+                X_klotz, Y_klotz = ray_table_intersect(ray, _cam_pos, _cam_quat, z_table)
+            else:
+                X_klotz, Y_klotz = 0.0, 0.0
 
             # Twist-Minimierung: wähle optimalen Greif-Yaw (θ oder θ+180°)
             opt_yaw = minimize_twist(theta, current_robot_yaw)

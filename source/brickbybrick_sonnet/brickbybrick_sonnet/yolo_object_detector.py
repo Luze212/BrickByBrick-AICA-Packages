@@ -17,7 +17,16 @@ Array-Format Ausgang yolo_corners_list:
   Stride 8 pro Klotz: [u1, v1, u2, v2, u3, v3, u4, v4, u1_B, v1_B, ...]
 """
 
+import os
 import numpy as np
+
+try:
+    from ament_index_python.packages import get_package_share_directory as _get_share
+    _SHARE = _get_share("brickbybrick_sonnet")
+except Exception:
+    _SHARE = "."
+
+_DEFAULT_MODEL_PATH = os.path.join(_SHARE, "data", "model", "best.pt")
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
@@ -33,7 +42,7 @@ class YoloObjectDetector(LifecycleComponent):
         # ── Parameter ─────────────────────────────────────────────────────────
         self._model_path = sr.Parameter(
             "model_path",
-            "source/sonnet_small/model/best.pt",
+            _DEFAULT_MODEL_PATH,
             sr.ParameterType.STRING,
         )
         self.add_parameter(
@@ -89,15 +98,6 @@ class YoloObjectDetector(LifecycleComponent):
         Lädt das YOLOv11-OBB Modell einmalig in den RAM/GPU.
         Dies ist ein zeitintensiver Vorgang – darf NICHT im on_step_callback passieren.
         """
-        # ══════════════════════════════════════════════════════════════════════
-        # TO-DO: YOLO-Modell laden
-        # Input:  Dateipfad aus Parameter "model_path"
-        # Output: self._model = YOLO-Modell-Objekt, bereit zur Inferenz
-        # Voraussichtlicher Code:
-        #     from ultralytics import YOLO
-        #     self._model = YOLO(self._model_path.get_value())
-        # Benötigt: Verifizierter Modellpfad und korrekte ultralytics-Installation
-        # ══════════════════════════════════════════════════════════════════════
         path = self._model_path.get_value()
         try:
             from ultralytics import YOLO
@@ -158,14 +158,6 @@ class YoloObjectDetector(LifecycleComponent):
 
         height, width = image_array.shape[:2]
 
-        # ══════════════════════════════════════════════════════════════════════
-        # TO-DO: YOLOv11 OBB Inferenz
-        # Input:  image_array (numpy array, RGB oder BGR je nach Kamera-Treiber)
-        # Output: results – ultralytics YOLO Results Objekt
-        # Voraussichtlicher Code:
-        #     results = self._model(image_array, verbose=False)
-        # Zu prüfen: Benötigt das Modell RGB oder BGR? Ggf. cv2.cvtColor() vorschalten.
-        # ══════════════════════════════════════════════════════════════════════
         results = self._model(image_array, verbose=False)
 
         corners_flat = []
@@ -174,15 +166,6 @@ class YoloObjectDetector(LifecycleComponent):
             obb = results[0].obb
 
             if len(obb) > 0:
-                # ══════════════════════════════════════════════════════════════
-                # TO-DO: Präzise Eckpunktberechnung via Tangenten
-                # Input:  obb – ultralytics OBB-Objekt mit .xyxyxyxy Tensor
-                #               Form: (N, 4, 2) → N Klötze, je 4 Ecken (u, v)
-                # Output: pro Klotz exakt 4 Eckpunkte (P1..P4) im Pixelraum
-                # Aktuell: direkte Übernahme der OBB-Ecken (Näherung).
-                # Für höhere Präzision: Tangenten an Segmentierungsmaske anlegen
-                # und Schnittpunkte als Ecken verwenden.
-                # ══════════════════════════════════════════════════════════════
                 all_corners = obb.xyxyxyxy.cpu().numpy()   # shape: (N, 4, 2)
 
                 for box_corners in all_corners:

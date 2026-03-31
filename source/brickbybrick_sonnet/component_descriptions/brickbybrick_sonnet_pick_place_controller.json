@@ -49,6 +49,12 @@
       "signal_name": "depth_image",
       "signal_type": "other",
       "custom_signal_type": "state_representation::Image"
+    },
+    {
+      "display_name": "Ist-Pose (Kamera)",
+      "description": "Kamerapose im Weltframe als Echtzeit-Stream. Wird für depth_to_world_z (Z_pick-Berechnung) in WAIT_IMG_1 und WAIT_IMG_2 benötigt.",
+      "signal_name": "cam_ist_pose",
+      "signal_type": "cartesian_pose"
     }
   ],
   "outputs": [
