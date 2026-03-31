@@ -40,25 +40,15 @@ class MasterListManager(LifecycleComponent):
     def __init__(self, node_name: str, *args, **kwargs):
         super().__init__(node_name, *args, **kwargs)
 
-        # ── Parameter (Kamera-Intrinsics + Tischgeometrie) ───────────────────
-        # Kamera-Intrinsics für Intel RealSense D435i bei 640×480.
-        # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]
-        # !! Bei Auflösungswechsel müssen fx, fy, cx, cy neu gesetzt werden.  !!
-        # !! Exakte Werte: RealSense Viewer → Kamera → Info → Intrinsics      !!
-        self._cam_fx = sr.Parameter("cam_fx", 322.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_fx", "Linsenparameter fx [px] – D435i 640×480 (K[0,0])")
+        # ── Kamera-Linsenparameter (Klassenvariablen, kein AICA-Parameter) ─────
+        # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]  – D435i 640×480
+        # Bei Auflösungswechsel hier anpassen (exakte Werte: RealSense Viewer → Intrinsics)
+        self._cam_fx = 322.0   # Brennweite X [px]
+        self._cam_fy = 322.0   # Brennweite Y [px]
+        self._cam_cx = 320.0   # Hauptpunkt X [px] – Bildmitte horizontal
+        self._cam_cy = 240.0   # Hauptpunkt Y [px] – Bildmitte vertikal
 
-        self._cam_fy = sr.Parameter("cam_fy", 322.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_fy", "Linsenparameter fy [px] – D435i 640×480 (K[1,1])")
-
-        self._cam_cx = sr.Parameter("cam_cx", 320.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_cx", "Linsenparameter cx [px] – Bildmitte horizontal 640/2 (K[0,2])")
-
-        self._cam_cy = sr.Parameter("cam_cy", 240.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_cy", "Linsenparameter cy [px] – Bildmitte vertikal 480/2 (K[1,2])")
-
-        # !! Tischhöhe: gemessener Montagewert = 170 mm.                       !!
-        # !! Bei Umbau des Aufbaus (andere Tischhöhe) hier anpassen.           !!
+        # ── Parameter (rekonfigurierbare Tischgeometrie) ─────────────────────
         self._z_table = sr.Parameter("z_table", 0.170, sr.ParameterType.DOUBLE)
         self.add_parameter("_z_table", "Tischhöhe im Weltframe [m] – aktuell 170 mm, bei Umbau anpassen")
 
@@ -106,6 +96,8 @@ class MasterListManager(LifecycleComponent):
         self._mlm_done_trigger = False
         self.add_output("mlm_done_trigger", "_mlm_done_trigger", Bool)
 
+        self._reset_trigger_next_step: bool = False
+
     # ─────────────────────────────────────────────────────────────────────────
     # Lifecycle-Callbacks
     # ─────────────────────────────────────────────────────────────────────────
@@ -135,9 +127,13 @@ class MasterListManager(LifecycleComponent):
     # ─────────────────────────────────────────────────────────────────────────
 
     def on_step_callback(self):
-        # Saubere steigende Flanke: Trigger im darauffolgenden Takt zurücksetzen
-        if self._mlm_done_trigger:
+        # Verzögerter Reset: erst im übernächsten Takt zurücksetzen,
+        # damit AICA beim Publish noch True sieht.
+        if self._reset_trigger_next_step:
             self._mlm_done_trigger = False
+            self._reset_trigger_next_step = False
+        elif self._mlm_done_trigger:
+            self._reset_trigger_next_step = True
 
     # ─────────────────────────────────────────────────────────────────────────
     # Event 1: YOLO-Erkennung abgeschlossen (steigende Flanke von yolo_done_trigger)
@@ -190,11 +186,10 @@ class MasterListManager(LifecycleComponent):
         # ── Kamera-Intrinsics und Tischhöhe einmalig aus Parametern lesen ────
         # !! Bei Auflösungswechsel (z. B. 848×480) diese Parameter in AICA neu  !!
         # !! konfigurieren – Werte aus: RealSense Viewer → Info → Intrinsics     !!
-        fx      = self._cam_fx.get_value()   # Brennweite X [px]
-        fy      = self._cam_fy.get_value()   # Brennweite Y [px]
-        cx      = self._cam_cx.get_value()   # Hauptpunkt X [px]
-        cy      = self._cam_cy.get_value()   # Hauptpunkt Y [px]
-        # !! Tischhöhe: 170 mm – bei Umbau des Aufbaus anpassen !!
+        fx      = self._cam_fx   # Brennweite X [px]
+        fy      = self._cam_fy   # Brennweite Y [px]
+        cx      = self._cam_cx   # Hauptpunkt X [px]
+        cy      = self._cam_cy   # Hauptpunkt Y [px]
         z_table = self._z_table.get_value()  # Tischhöhe im Weltframe [m]
 
         # Kamerapose einmalig für alle Klötze dieses Zyklus extrahieren

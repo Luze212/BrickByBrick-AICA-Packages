@@ -83,6 +83,8 @@ class YoloObjectDetector(LifecycleComponent):
         self._yolo_done_trigger = False
         self.add_output("yolo_done_trigger", "_yolo_done_trigger", Bool)
 
+        self._reset_trigger_next_step: bool = False
+
         # ── Internes Modell-Handle (persistent, über Taktzyklen hinweg) ───────
         self._model = None      # wird in on_configure_callback geladen
 
@@ -133,9 +135,13 @@ class YoloObjectDetector(LifecycleComponent):
     # ─────────────────────────────────────────────────────────────────────────
 
     def on_step_callback(self):
-        # Saubere steigende Flanke: Trigger im darauffolgenden Takt zurücksetzen
-        if self._yolo_done_trigger:
+        # Verzögerter Reset: erst im übernächsten Takt zurücksetzen,
+        # damit AICA beim Publish noch True sieht.
+        if self._reset_trigger_next_step:
             self._yolo_done_trigger = False
+            self._reset_trigger_next_step = False
+        elif self._yolo_done_trigger:
+            self._reset_trigger_next_step = True
 
     # ─────────────────────────────────────────────────────────────────────────
     # Event-Callback: neues (eingefrorenes) Bild von PoseTriggeredCamera

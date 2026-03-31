@@ -57,6 +57,14 @@
       "signal_type": "cartesian_pose"
     }
   ],
+  "parameters": [
+    {
+      "display_name": "Hover-Höhe",
+      "description": "Abstand über Klotz/Ablage für Zwischenpositionen [m]. Nach erstem Testlauf am KUKA anpassen.",
+      "parameter_name": "hover_height",
+      "parameter_type": "double"
+    }
+  ],
   "outputs": [
     {
       "display_name": "Ziel-Pose (Roboter)",

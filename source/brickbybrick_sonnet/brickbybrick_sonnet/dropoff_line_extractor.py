@@ -83,10 +83,14 @@ class DropoffLineExtractor(LifecycleComponent):
             return
 
         # ── Steigende Flanke: nur bei True auswerten ──────────────────────────
-        # Der Callback feuert bei jeder eingehenden Nachricht auf dem Signal.
-        # Da yolo_done_trigger für genau einen Takt True ist, filtert diese
-        # Prüfung alle "False"-Nachrichten heraus.
         if not self._yolo_done_trigger:
+            return
+
+        # ── Kamerapose prüfen (fehlt bei allerersten Taktzyklen) ──────────────
+        if self._cam_ist_pose.is_empty():
+            self.get_logger().warn(
+                "DropoffLineExtractor: Kamerapose fehlt – überspringe Inferenz."
+            )
             return
 
         self.get_logger().info(

@@ -44,6 +44,14 @@
       "signal_type": "bool"
     }
   ],
+  "parameters": [
+    {
+      "display_name": "Tischhöhe",
+      "description": "Höhe der Tischebene im Weltframe [m]. Wird für die Strahl-Tisch-Schnittberechnung (Pinhole-Projektion) benötigt.",
+      "parameter_name": "z_table",
+      "parameter_type": "double"
+    }
+  ],
   "outputs": [
     {
       "display_name": "Übersichts-Posen (Master Overview)",

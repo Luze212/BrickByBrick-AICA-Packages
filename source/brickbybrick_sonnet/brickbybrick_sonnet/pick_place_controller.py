@@ -39,8 +39,6 @@ from brickbybrick_sonnet.geometry_utils import depth_to_world_z
 
 
 # ── Hardware-Konstanten ───────────────────────────────────────────────────────
-# !! Hover-Höhe: aktuell 15 cm – nach erstem Testlauf am KUKA anpassen !!
-_HOVER_HEIGHT_M = 0.15     # Hover-Abstand über Klotz/Ablage in Metern
 # TCP = Saugnapf-Kontaktpunkt (mit Anschlag bereits eingerechnet) → kein Offset
 _Z_SAUGER_M     = 0.0
 _Z_PICK_DEFAULT = 0.02     # Fallback Pick-Höhe bis Tiefenkamera kalibriert ist
@@ -83,17 +81,17 @@ class PickPlaceController(LifecycleComponent):
         self._cam_ist_pose = sr.CartesianPose("cam_ist_pose", "world")
         self.add_input("cam_ist_pose", "_cam_ist_pose", EncodedState)
 
-        # ── Kamera-Linsenparameter (für depth_to_world_z) ─────────────────────
+        # ── Kamera-Linsenparameter (Klassenvariablen, kein AICA-Parameter) ──────
         # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]  – D435i 640×480
-        # !! Bei Auflösungswechsel anpassen (exakte Werte: RealSense Viewer → Intrinsics) !!
-        self._cam_fx = sr.Parameter("cam_fx", 322.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_fx", "Linsenparameter fx [px] – D435i 640×480 (K[0,0])")
-        self._cam_fy = sr.Parameter("cam_fy", 322.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_fy", "Linsenparameter fy [px] – D435i 640×480 (K[1,1])")
-        self._cam_cx = sr.Parameter("cam_cx", 320.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_cx", "Linsenparameter cx [px] – Bildmitte horizontal 640/2 (K[0,2])")
-        self._cam_cy = sr.Parameter("cam_cy", 240.0, sr.ParameterType.DOUBLE)
-        self.add_parameter("_cam_cy", "Linsenparameter cy [px] – Bildmitte vertikal 480/2 (K[1,2])")
+        # Bei Auflösungswechsel hier anpassen (exakte Werte: RealSense Viewer → Intrinsics)
+        self._cam_fx = 322.0   # Brennweite X [px]
+        self._cam_fy = 322.0   # Brennweite Y [px]
+        self._cam_cx = 320.0   # Hauptpunkt X [px]
+        self._cam_cy = 240.0   # Hauptpunkt Y [px]
+
+        # ── Rekonfigurierbare Parameter ───────────────────────────────────────
+        self._hover_height = sr.Parameter("hover_height", 0.15, sr.ParameterType.DOUBLE)
+        self.add_parameter("_hover_height", "Hover-Abstand über Klotz/Ablage [m] – nach Testlauf anpassen")
 
         # ── Outputs ───────────────────────────────────────────────────────────
         self._target_pose_out = sr.CartesianPose("target_pose_out", "world")
@@ -349,8 +347,8 @@ class PickPlaceController(LifecycleComponent):
                             float(cam_ori[2]), float(cam_ori[3])]
                 self._z_pick = depth_to_world_z(
                     u_c, v_c, depth_m,
-                    self._cam_fx.get_value(), self._cam_fy.get_value(),
-                    self._cam_cx.get_value(), self._cam_cy.get_value(),
+                    self._cam_fx, self._cam_fy,
+                    self._cam_cx, self._cam_cy,
                     cam_pos, cam_quat,
                 )
                 self.get_logger().info(
@@ -378,7 +376,7 @@ class PickPlaceController(LifecycleComponent):
         Y_hover = Y_b   # ← TO-DO: Kameraversatz eintragen sobald eingemessen
 
         # Hover-Pose setzen und weiterfahren
-        hover_z = self._z_pick + _HOVER_HEIGHT_M
+        hover_z = self._z_pick + self._hover_height.get_value()
         self._target_pose_out.set_position([X_hover, Y_hover, hover_z])
         self._target_pose_out.set_orientation(quat)
 
@@ -454,8 +452,8 @@ class PickPlaceController(LifecycleComponent):
                             float(cam_ori[2]), float(cam_ori[3])]
                 self._z_pick = depth_to_world_z(
                     u_c, v_c, depth_m,
-                    self._cam_fx.get_value(), self._cam_fy.get_value(),
-                    self._cam_cx.get_value(), self._cam_cy.get_value(),
+                    self._cam_fx, self._cam_fy,
+                    self._cam_cx, self._cam_cy,
                     cam_pos, cam_quat,
                 )
                 self.get_logger().info(
@@ -476,7 +474,7 @@ class PickPlaceController(LifecycleComponent):
         # ── Pick-Pose und Retract-Pose generieren ─────────────────────────────
         z_pick    = self._z_pick
         z_drop    = z_pick - _Z_SAUGER_M
-        z_retract = z_pick + _HOVER_HEIGHT_M
+        z_retract = z_pick + self._hover_height.get_value()
 
         # Pick-Pose sofort als target setzen
         self._target_pose_out.set_position([X_fein, Y_fein, z_drop])
@@ -535,7 +533,7 @@ class PickPlaceController(LifecycleComponent):
         pos  = self._master_dropoff_local[0:3]
         ori  = self._master_dropoff_local[3:7]
         X_d, Y_d, Z_d = float(pos[0]), float(pos[1]), float(pos[2])
-        hover_z = Z_d + _HOVER_HEIGHT_M
+        hover_z = Z_d + self._hover_height.get_value()
 
         self._target_pose_out.set_position([X_d, Y_d, hover_z])
         self._target_pose_out.set_orientation(ori)
@@ -569,7 +567,7 @@ class PickPlaceController(LifecycleComponent):
             elapsed = (self.get_clock().now() - self._timer_start).nanoseconds / 1e9
             if elapsed >= 0.5:
                 # Retract nach Ablage
-                hover_z = Z_d + _HOVER_HEIGHT_M
+                hover_z = Z_d + self._hover_height.get_value()
                 self._target_pose_out.set_position([X_d, Y_d, hover_z])
                 self._target_pose_out.set_orientation(ori)
                 self._sub_state = "APPROACH_RETRACT"
