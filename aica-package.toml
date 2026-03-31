@@ -31,7 +31,7 @@ source = "./source/brickbybrick_sonnet"
 ## System-Abhängigkeiten für ultralytics (YOLO) – OpenCV benötigt diese im Container
 [build.packages.brickbybrick-sonnet.dependencies.apt]
 libgl1 = "*"
-libglib2.0-0 = "*"
+"libglib2.0-0"= "*"
 
 ## by default, we will install any pip packages in `${package_source}/requirements.txt`
 ## but you can customize the name of the requirements file, e.g.
