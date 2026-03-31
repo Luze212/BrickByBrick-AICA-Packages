@@ -34,6 +34,7 @@ import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
+from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import Bool, Float64MultiArray
 from brickbybrick_sonnet.geometry_utils import depth_to_world_z
 
@@ -75,8 +76,8 @@ class PickPlaceController(LifecycleComponent):
         self._master_overview = []
         self.add_input("master_overview", "_master_overview", Float64MultiArray)
 
-        self._depth_image = sr.Image()
-        self.add_input("depth_image", "_depth_image", EncodedState)
+        self._depth_image = RosImage()
+        self.add_input("depth_image", "_depth_image", RosImage)
 
         self._cam_ist_pose = sr.CartesianPose("cam_ist_pose", "world")
         self.add_input("cam_ist_pose", "_cam_ist_pose", EncodedState)
@@ -333,8 +334,11 @@ class PickPlaceController(LifecycleComponent):
         quat = best_brick[5:9]  # [Qx, Qy, Qz, Qw]
 
         # ── Tiefenbild auswerten → Z_pick ────────────────────────────────────
-        depth_array = self._depth_image.get_data()
-        if depth_array is not None and depth_array.size > 0 and not self._cam_ist_pose.is_empty():
+        msg = self._depth_image
+        if msg.data and not self._cam_ist_pose.is_empty():
+            depth_array = np.frombuffer(msg.data, dtype=np.uint16).reshape(
+                (msg.height, msg.width)
+            )
             u_i = int(round(u_c))
             v_i = int(round(v_c))
             patch = depth_array[max(0, v_i - 2):v_i + 3, max(0, u_i - 2):u_i + 3]
@@ -438,8 +442,11 @@ class PickPlaceController(LifecycleComponent):
 
         # ── Fix M-5: Z_pick aus frischem Hover-Tiefenbild aktualisieren ─────────
         # Das Hover-Bild ist deutlich näher → präzisere Tiefenmessung.
-        depth_array = self._depth_image.get_data()
-        if depth_array is not None and depth_array.size > 0 and not self._cam_ist_pose.is_empty():
+        msg = self._depth_image
+        if msg.data and not self._cam_ist_pose.is_empty():
+            depth_array = np.frombuffer(msg.data, dtype=np.uint16).reshape(
+                (msg.height, msg.width)
+            )
             u_i = int(round(u_c))
             v_i = int(round(v_c))
             patch = depth_array[max(0, v_i - 2):v_i + 3, max(0, u_i - 2):u_i + 3]

@@ -30,7 +30,7 @@
       "description": "Kontinuierlicher Bilddatenstrom der Kamera. Wird nur zum Snapshot-Zeitpunkt kopiert.",
       "signal_name": "image_stream",
       "signal_type": "other",
-      "custom_signal_type": "state_representation::Image"
+      "custom_signal_type": "sensor_msgs::msg::Image"
     }
   ],
   "outputs": [
@@ -57,7 +57,7 @@
       "description": "Deep-Copy des Bildes zum exakten Aufnahmezeitpunkt.",
       "signal_name": "image_out",
       "signal_type": "other",
-      "custom_signal_type": "state_representation::Image"
+      "custom_signal_type": "sensor_msgs::msg::Image"
     }
   ]
 }

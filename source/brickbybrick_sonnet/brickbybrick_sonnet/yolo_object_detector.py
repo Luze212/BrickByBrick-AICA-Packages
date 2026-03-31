@@ -31,6 +31,7 @@ import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
+from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import Bool, Float64MultiArray
 
 
@@ -52,9 +53,9 @@ class YoloObjectDetector(LifecycleComponent):
 
         # ── Inputs ────────────────────────────────────────────────────────────
         # image_in: Event-getrieben – user_callback wird bei jedem neuen Bild gefeuert
-        self._image_in = sr.Image()
+        self._image_in = RosImage()
         self.add_input(
-            "image_in", "_image_in", EncodedState,
+            "image_in", "_image_in", RosImage,
             user_callback=self._on_new_image,
         )
 
@@ -155,14 +156,17 @@ class YoloObjectDetector(LifecycleComponent):
             return
 
         # ── Bilddaten extrahieren ─────────────────────────────────────────────
-        image_array = self._image_in.get_data()
-        if image_array is None or image_array.size == 0:
+        msg = self._image_in
+        if not msg.data:
             self.get_logger().warn(
                 "YoloObjectDetector: Leeres Bild empfangen – überspringe Inferenz."
             )
             return
 
-        height, width = image_array.shape[:2]
+        image_array = np.frombuffer(msg.data, dtype=np.uint8).reshape(
+            (msg.height, msg.width, -1)
+        )
+        height, width = msg.height, msg.width
 
         results = self._model(image_array, verbose=False)
 

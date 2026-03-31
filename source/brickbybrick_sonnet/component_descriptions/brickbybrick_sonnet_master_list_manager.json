@@ -49,7 +49,8 @@
       "display_name": "Tischhöhe",
       "description": "Höhe der Tischebene im Weltframe [m]. Wird für die Strahl-Tisch-Schnittberechnung (Pinhole-Projektion) benötigt.",
       "parameter_name": "z_table",
-      "parameter_type": "double"
+      "parameter_type": "double",
+      "default_value": "0.170"
     }
   ],
   "outputs": [

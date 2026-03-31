@@ -48,7 +48,7 @@
       "description": "Echtzeit-Tiefenbild der Kamera. Wird in WAIT_IMG_1 und WAIT_IMG_2 ausgewertet um Z_pick (exakte Klotz-Höhe) zu bestimmen.",
       "signal_name": "depth_image",
       "signal_type": "other",
-      "custom_signal_type": "state_representation::Image"
+      "custom_signal_type": "sensor_msgs::msg::Image"
     },
     {
       "display_name": "Ist-Pose (Kamera)",
@@ -62,7 +62,8 @@
       "display_name": "Hover-Höhe",
       "description": "Abstand über Klotz/Ablage für Zwischenpositionen [m]. Nach erstem Testlauf am KUKA anpassen.",
       "parameter_name": "hover_height",
-      "parameter_type": "double"
+      "parameter_type": "double",
+      "default_value": "0.15"
     }
   ],
   "outputs": [

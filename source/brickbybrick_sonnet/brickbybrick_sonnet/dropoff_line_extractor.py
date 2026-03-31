@@ -14,9 +14,11 @@ Output-Format line_ex_list:
   Stride 7 pro Ablagepose: [X, Y, Z, Qx, Qy, Qz, Qw, X2, Y2, Z2, ...]
 """
 
+import numpy as np
 import state_representation as sr
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
+from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import Bool, Float64MultiArray
 
 
@@ -26,8 +28,8 @@ class DropoffLineExtractor(LifecycleComponent):
         super().__init__(node_name, *args, **kwargs)
 
         # ── Inputs ────────────────────────────────────────────────────────────
-        self._image_in = sr.Image()
-        self.add_input("image_in", "_image_in", EncodedState)
+        self._image_in = RosImage()
+        self.add_input("image_in", "_image_in", RosImage)
 
         self._cam_ist_pose = sr.CartesianPose("cam_ist_pose", "world")
         self.add_input("cam_ist_pose", "_cam_ist_pose", EncodedState)
@@ -98,12 +100,16 @@ class DropoffLineExtractor(LifecycleComponent):
         )
 
         # ── Bilddaten laden ───────────────────────────────────────────────────
-        image_array = self._image_in.get_data()
-        if image_array is None or image_array.size == 0:
+        msg = self._image_in
+        if not msg.data:
             self.get_logger().warn(
                 "DropoffLineExtractor: Leeres Bild empfangen – überspringe Erkennung."
             )
             return
+
+        image_array = np.frombuffer(msg.data, dtype=np.uint8).reshape(
+            (msg.height, msg.width, -1)
+        )
 
         # ══════════════════════════════════════════════════════════════════════
         # TO-DO: Bernhards Linienerkennungs-Algorithmus (Farbabgleich)

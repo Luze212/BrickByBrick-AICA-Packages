@@ -12,7 +12,7 @@
       "description": "Synchron eingefrorener Snapshot von PoseTriggeredCamera.",
       "signal_name": "image_in",
       "signal_type": "other",
-      "custom_signal_type": "state_representation::Image"
+      "custom_signal_type": "sensor_msgs::msg::Image"
     },
     {
       "display_name": "Ist-Pose (Kamera)",

@@ -12,12 +12,14 @@ Ablauf:
   5. Reset: sobald trajectory_success wieder False wird → img_taken = False
 """
 
+import copy
 import numpy as np
 from scipy.spatial.transform import Rotation
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
+from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import Bool
 
 
@@ -48,8 +50,8 @@ class PoseTriggeredCamera(LifecycleComponent):
         self._ist_pose_in = sr.CartesianPose("ist_pose_in", "world")
         self.add_input("ist_pose_in", "_ist_pose_in", EncodedState)
 
-        self._image_stream = sr.Image()
-        self.add_input("image_stream", "_image_stream", EncodedState)
+        self._image_stream = RosImage()
+        self.add_input("image_stream", "_image_stream", RosImage)
 
         # ── Outputs ───────────────────────────────────────────────────────────
         self._img_taken = False
@@ -67,8 +69,8 @@ class PoseTriggeredCamera(LifecycleComponent):
             EncodedState, MessageType.CARTESIAN_POSE_MESSAGE,
         )
 
-        self._image_out = sr.Image()
-        self.add_output("image_out", "_image_out", EncodedState)
+        self._image_out = RosImage()
+        self.add_output("image_out", "_image_out", RosImage)
 
         # ── Interne Zustandsvariablen (über Taktzyklen hinweg persistent) ─────
         self._is_delaying: bool = False
@@ -125,7 +127,7 @@ class PoseTriggeredCamera(LifecycleComponent):
 
                 if elapsed >= 0.3:
                     # ── Snapshot-Moment: Klon-Konstruktor für C++-gebundene Objekte ─
-                    self._image_out    = sr.Image(self._image_stream)
+                    self._image_out    = copy.deepcopy(self._image_stream)
                     self._ist_pose_out = sr.CartesianPose(self._ist_pose_in)
 
                     # ── Kamerapose aus TCP-Pose + Montage-Offset berechnen ────────
