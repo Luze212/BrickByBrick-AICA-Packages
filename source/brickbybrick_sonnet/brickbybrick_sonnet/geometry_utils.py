@@ -4,7 +4,7 @@ geometry_utils.py
 Gemeinsame mathematische Hilfsfunktionen für alle BrickByBrick-Komponenten.
 
 Implementiert:
-  - quaternion_from_euler      : Euler (RPY) → Quaternion [qx, qy, qz, qw]
+  - quaternion_from_euler      : Euler (RPY) → Quaternion [qw, qx, qy, qz] (AICA-Konvention)
   - yaw_from_quaternion        : Quaternion → Yaw-Winkel (Z-Rotation, Radiant)
   - minimize_twist             : Optimaler Greif-Yaw bei 180°-symmetrischem Klotz
   - gauss_shoelace_area        : Polygonfläche via Gaußsche Trapezformel
@@ -42,13 +42,14 @@ def quaternion_from_euler(roll_rad: float, pitch_rad: float, yaw_rad: float) -> 
         yaw_rad:   Rotation um Z-Achse in Radiant
 
     Returns:
-        [qx, qy, qz, qw] als Python-Liste
+        [qw, qx, qy, qz] als Python-Liste (AICA-Konvention)
     """
     rot = Rotation.from_euler('xyz', [roll_rad, pitch_rad, yaw_rad])
-    return rot.as_quat().tolist()  # scipy liefert [qx, qy, qz, qw]
+    q = rot.as_quat()  # scipy liefert [qx, qy, qz, qw]
+    return [q[3], q[0], q[1], q[2]]  # umordnen → [qw, qx, qy, qz]
 
 
-def yaw_from_quaternion(qx: float, qy: float, qz: float, qw: float) -> float:
+def yaw_from_quaternion(qw: float, qx: float, qy: float, qz: float) -> float:
     """
     Extrahiert den Yaw-Winkel (Z-Rotation) aus einem Quaternion.
 
@@ -56,12 +57,12 @@ def yaw_from_quaternion(qx: float, qy: float, qz: float, qw: float) -> float:
     für die Twist-Minimierung zu bestimmen.
 
     Args:
-        qx, qy, qz, qw: Quaternion-Komponenten
+        qw, qx, qy, qz: Quaternion-Komponenten (AICA-Konvention: qw zuerst)
 
     Returns:
         Yaw-Winkel in Radiant
     """
-    rot = Rotation.from_quat([qx, qy, qz, qw])
+    rot = Rotation.from_quat([qx, qy, qz, qw])  # scipy: [qx, qy, qz, qw]
     euler = rot.as_euler('xyz')   # [roll, pitch, yaw]
     return float(euler[2])
 
@@ -165,7 +166,7 @@ def ray_table_intersect(ray_cam: list,
     Args:
         ray_cam:   Normalisierter Sichtstrahl im Kamera-Frame [dx, dy, dz]
         cam_pos:   Kameraposition im Weltframe [x, y, z]
-        cam_quat:  Kameraquaternion im Weltframe [qx, qy, qz, qw]
+        cam_quat:  Kameraquaternion im Weltframe [qw, qx, qy, qz] (AICA-Konvention)
         z_table:   Tischhöhe im Weltframe [m]  ← gemessen 170 mm, bei Umbau anpassen
 
     Returns:
@@ -173,7 +174,7 @@ def ray_table_intersect(ray_cam: list,
         Falls der Strahl parallel zur Tischebene verläuft (ray_world.z ≈ 0),
         wird (cam_pos.x, cam_pos.y) als Fallback zurückgegeben.
     """
-    rot = Rotation.from_quat(cam_quat)          # [qx, qy, qz, qw]
+    rot = Rotation.from_quat([cam_quat[1], cam_quat[2], cam_quat[3], cam_quat[0]])  # [qw,qx,qy,qz] → [qx,qy,qz,qw]
     ray_world = rot.apply(ray_cam).tolist()
 
     ox, oy, oz = cam_pos
@@ -208,7 +209,7 @@ def depth_to_world_z(u: float, v: float, depth_m: float,
         fx, fy:     Linsenparameter [px] – D435i 640×480: fx=322, fy=322
         cx, cy:     Linsenparameter [px] – D435i 640×480: cx=320, cy=240
         cam_pos:    Kamera-Weltpose – Position [x, y, z] im Weltframe
-        cam_quat:   Kamera-Weltpose – Orientierung [qx, qy, qz, qw] im Weltframe
+        cam_quat:   Kamera-Weltpose – Orientierung [qw, qx, qy, qz] im Weltframe (AICA-Konvention)
 
     Returns:
         Z_pick – Höhe des Klotzes im Weltkoordinatensystem (Meter)
@@ -216,7 +217,7 @@ def depth_to_world_z(u: float, v: float, depth_m: float,
     X_cam = (u - cx) * depth_m / fx
     Y_cam = (v - cy) * depth_m / fy
     Z_cam = depth_m
-    rot = Rotation.from_quat(cam_quat)
+    rot = Rotation.from_quat([cam_quat[1], cam_quat[2], cam_quat[3], cam_quat[0]])  # [qw,qx,qy,qz] → [qx,qy,qz,qw]
     point_world = rot.apply([X_cam, Y_cam, Z_cam]) + np.array(cam_pos)
     return float(point_world[2])
 

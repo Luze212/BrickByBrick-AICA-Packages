@@ -135,15 +135,18 @@ class PoseTriggeredCamera(LifecycleComponent):
                     # cam_quat_world = q_tcp_world ⊗ _CAM_OFFSET_QUAT
                     # TO-DO: _CAM_OFFSET_XYZ und _CAM_OFFSET_QUAT nach Einmessung befüllen
                     tcp_pos  = np.array(self._ist_pose_in.get_position(), dtype=float)
-                    tcp_ori  = self._ist_pose_in.get_orientation()
-                    tcp_quat = [float(tcp_ori[0]), float(tcp_ori[1]),
-                                float(tcp_ori[2]), float(tcp_ori[3])]
-                    R_tcp = Rotation.from_quat(tcp_quat)
+                    tcp_ori  = self._ist_pose_in.get_orientation()  # AICA: [qw, qx, qy, qz]
+                    # Umordnung für scipy: [qw,qx,qy,qz] → [qx,qy,qz,qw]
+                    tcp_quat_scipy = [float(tcp_ori[1]), float(tcp_ori[2]),
+                                      float(tcp_ori[3]), float(tcp_ori[0])]
+                    R_tcp = Rotation.from_quat(tcp_quat_scipy)
                     cam_pos  = (tcp_pos + R_tcp.apply(_CAM_OFFSET_XYZ)).tolist()
-                    cam_quat = (R_tcp * Rotation.from_quat(_CAM_OFFSET_QUAT)).as_quat().tolist()
+                    # _CAM_OFFSET_QUAT ist intern in scipy-Format [qx,qy,qz,qw]
+                    q = (R_tcp * Rotation.from_quat(_CAM_OFFSET_QUAT)).as_quat()
+                    cam_quat_aica = [q[3], q[0], q[1], q[2]]  # → [qw, qx, qy, qz]
                     self._cam_ist_pose_out = sr.CartesianPose("cam_ist_pose_out", "world")
                     self._cam_ist_pose_out.set_position(cam_pos)
-                    self._cam_ist_pose_out.set_orientation(cam_quat)
+                    self._cam_ist_pose_out.set_orientation(cam_quat_aica)
 
                     self._img_taken = True
                     self._is_delaying = False

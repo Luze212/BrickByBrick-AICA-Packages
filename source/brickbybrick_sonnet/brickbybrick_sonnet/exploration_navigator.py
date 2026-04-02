@@ -118,7 +118,7 @@ class ExplorationNavigator(LifecycleComponent):
                 ori = entry["orientation"]
                 pose = sr.CartesianPose(pose_name, "world")
                 pose.set_position([pos["x"], pos["y"], pos["z"]])
-                pose.set_orientation([ori["qx"], ori["qy"], ori["qz"], ori["qw"]])
+                pose.set_orientation([ori["qw"], ori["qx"], ori["qy"], ori["qz"]])
                 self._exploration_pose_list.append(pose)
             except KeyError as exc:
                 self.get_logger().error(

@@ -46,7 +46,7 @@ _Z_PICK_DEFAULT = 0.02     # Fallback Pick-Höhe bis Tiefenkamera kalibriert ist
 
 # Home-Pose = frame3 aus ExplCords.yaml
 _HOME_POSITION    = [0.295, 0.0, 0.57]    # [X, Y, Z] in Meter
-_HOME_ORIENTATION = [0.0, 1.0, 0.0, 0.0]  # [Qx, Qy, Qz, Qw]
+_HOME_ORIENTATION = [0.0, 0.0, 1.0, 0.0]  # [qw, qx, qy, qz] – 180° um Y-Achse (Sauger nach unten)
 
 
 class PickPlaceController(LifecycleComponent):

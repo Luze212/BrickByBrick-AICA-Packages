@@ -1,7 +1,7 @@
 # Explorationsposen für die Pick-&-Place-Anlage
 # ─────────────────────────────────────────────────────────────────────────────
 # Format: Jeder Eintrag ist eine benannte Pose mit Position (x, y, z in Meter)
-# und Orientierung als Quaternion (qx, qy, qz, qw, skalarer Teil zuletzt).
+# und Orientierung als Quaternion (qw, qx, qy, qz – skalarer Teil qw zuerst, AICA-Konvention).
 # Die Posen werden vom ExplorationNavigator in der hier angegebenen Reihenfolge
 # von oben nach unten abgefahren.
 #
