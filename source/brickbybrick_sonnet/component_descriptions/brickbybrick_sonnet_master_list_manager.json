@@ -21,7 +21,7 @@
     },
     {
       "display_name": "Ablage-Posen (vom Linien-Extraktor)",
-      "description": "Flaches Array aller 3D-Ablageposen vom DropoffLineExtractor. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird übernommen wenn länger als bisherige master_dropoff.",
+      "description": "Flaches Array aller 3D-Ablageposen vom DropoffLineExtractor. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird übernommen wenn länger als bisherige master_dropoff.",
       "signal_name": "line_ex_list_in",
       "signal_type": "double_array"
     },
@@ -56,19 +56,19 @@
   "outputs": [
     {
       "display_name": "Übersichts-Posen (Master Overview)",
-      "description": "TCP-Posen aller Kameraaufnahmen aus Phase 1. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird nur in Phase 1 befüllt. Vom PickPlaceController als Fahrplan verwendet.",
+      "description": "TCP-Posen aller Kameraaufnahmen aus Phase 1. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird nur in Phase 1 befüllt. Vom PickPlaceController als Fahrplan verwendet.",
       "signal_name": "master_overview",
       "signal_type": "double_array"
     },
     {
       "display_name": "Ablage-Positionen (Master Dropoff)",
-      "description": "3D-TCP-Ablageposen für den Roboter. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird vom DropoffLineExtractor übernommen sobald eine vollständigere Liste vorliegt.",
+      "description": "3D-TCP-Ablageposen für den Roboter. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird vom DropoffLineExtractor übernommen sobald eine vollständigere Liste vorliegt.",
       "signal_name": "master_dropoff",
       "signal_type": "double_array"
     },
     {
       "display_name": "Gefilterte Klotz-Posen (Filtered YOLO)",
-      "description": "3D-Greifposen aller sichtbaren Klötze, die nicht auf Ablagepositionen liegen. Stride 9: [X,Y,Area,u_center,v_center,Qx,Qy,Qz,Qw,...]. Wird bei jeder YOLO-Inferenz überschrieben (Live-Output).",
+      "description": "3D-Greifposen aller sichtbaren Klötze, die nicht auf Ablagepositionen liegen. Stride 9: [X,Y,Area,u_center,v_center,Qw,Qx,Qy,Qz,...]. Wird bei jeder YOLO-Inferenz überschrieben (Live-Output).",
       "signal_name": "filtered_yolo",
       "signal_type": "double_array"
     },

@@ -27,19 +27,19 @@
     },
     {
       "display_name": "Gefilterte Klotz-Posen (Live)",
-      "description": "Live-Input vom MasterListManager. Stride 9: [X,Y,Area,u_center,v_center,Qx,Qy,Qz,Qw,...]. Wird bei jeder YOLO-Inferenz überschrieben – NICHT lokal kopieren!",
+      "description": "Live-Input vom MasterListManager. Stride 9: [X,Y,Area,u_center,v_center,Qw,Qx,Qy,Qz,...]. Wird bei jeder YOLO-Inferenz überschrieben – NICHT lokal kopieren!",
       "signal_name": "filtered_yolo",
       "signal_type": "double_array"
     },
     {
       "display_name": "Ablage-Positionen",
-      "description": "3D-Ablageposen vom MasterListManager. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird einmalig beim Start von Phase 2 kopiert.",
+      "description": "3D-Ablageposen vom MasterListManager. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird einmalig beim Start von Phase 2 kopiert.",
       "signal_name": "master_dropoff",
       "signal_type": "double_array"
     },
     {
       "display_name": "Übersichts-Posen",
-      "description": "Kameraaufnahme-Posen aus Phase 1 vom MasterListManager. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird einmalig beim Start von Phase 2 kopiert.",
+      "description": "Kameraaufnahme-Posen aus Phase 1 vom MasterListManager. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird einmalig beim Start von Phase 2 kopiert.",
       "signal_name": "master_overview",
       "signal_type": "double_array"
     },

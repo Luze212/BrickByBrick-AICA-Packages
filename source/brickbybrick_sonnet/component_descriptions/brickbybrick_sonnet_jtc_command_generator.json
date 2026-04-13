@@ -1,0 +1,44 @@
+{
+  "name": "jtc_command_generator",
+  "display_name": "JTC Command Generator",
+  "description": "Berechnet die benötigte Zeit für eine Pose und sendet einen einmaligen JTC-String-Befehl.",
+  "component_type": "lifecycle_component",
+  "inputs": [
+    {
+      "name": "ist_pose",
+      "display_name": "Ist-Pose",
+      "description": "Aktuelle Pose des Roboters (vom State Broadcaster)",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "name": "target_pose",
+      "display_name": "Ziel-Pose",
+      "description": "Die vom Navigator gesendete Ziel-Pose",
+      "signal_type": "cartesian_pose"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "jtc_command",
+      "display_name": "JTC Command",
+      "description": "Der generierte YAML-String für den JTC",
+      "signal_type": "string"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "v_max",
+      "display_name": "Max. Geschwindigkeit",
+      "description": "Gewünschte Geschwindigkeit in m/s",
+      "type": "double",
+      "default_value": 0.1
+    },
+    {
+      "name": "target_tf_name",
+      "display_name": "Ziel-Frame Name",
+      "description": "Name des Frames im TF-Tree (muss mit Signal-to-TF Block übereinstimmen)",
+      "type": "string",
+      "default_value": "mein_ziel_frame"
+    }
+  ]
+}

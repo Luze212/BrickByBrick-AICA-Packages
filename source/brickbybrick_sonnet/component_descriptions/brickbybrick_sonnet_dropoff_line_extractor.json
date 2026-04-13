@@ -2,7 +2,7 @@
   "name": "Dropoff Line Extractor",
   "description": {
     "brief": "Erkennt Ablagelinien im Kamerabild und erzeugt fertige 3D-TCP-Ablageposen.",
-    "details": "Event-getriebener Block, aktiv ausschließlich in Phase 1 (Exploration). Feuert bei steigender Flanke von yolo_done_trigger. Führt Bernhards Farb-Algorithmus auf dem eingefrorenen Bild aus und gibt alle erkannten Ablageposen als flaches double_array aus (Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]). Phase-2-Bypass: Sobald trigger_ppl=True, kehrt der Callback sofort zurück und verbraucht keine CPU."
+    "details": "Event-getriebener Block, aktiv ausschließlich in Phase 1 (Exploration). Feuert bei steigender Flanke von yolo_done_trigger. Führt Bernhards Farb-Algorithmus auf dem eingefrorenen Bild aus und gibt alle erkannten Ablageposen als flaches double_array aus (Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]). Phase-2-Bypass: Sobald trigger_ppl=True, kehrt der Callback sofort zurück und verbraucht keine CPU."
   },
   "registration": "brickbybrick_sonnet::DropoffLineExtractor",
   "inherits": "modulo_components::LifecycleComponent",
@@ -36,7 +36,7 @@
   "outputs": [
     {
       "display_name": "Ablageposen-Liste",
-      "description": "Flaches Array aller erkannten 3D-Ablageposen. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird vom MasterListManager übernommen wenn länger als bisherige Liste.",
+      "description": "Flaches Array aller erkannten 3D-Ablageposen. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird vom MasterListManager übernommen wenn länger als bisherige Liste.",
       "signal_name": "line_ex_list",
       "signal_type": "double_array"
     }
