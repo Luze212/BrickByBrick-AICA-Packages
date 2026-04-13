@@ -16,8 +16,9 @@ Ein AICA-Programm besteht aus Blöcken (Komponenten), die über grafische Kabel 
 ---
 
 ## 2. Code-Struktur & Signale (I/O)
-* **Inputs anlegen:** `self.add_input("_variablen_name", "ui_port_name", DataType)`
-* **Outputs anlegen:** `self.add_output("_variablen_name", "ui_port_name", DataType)`
+* **Inputs anlegen:** `self.add_input("ui_port_name", "_variablen_name", DataType)`
+* **Outputs anlegen:** `self.add_output("ui_port_name", "_variablen_name", DataType)`
+> **Reihenfolge:** Erster Parameter = AICA-Portname (ohne Unterstrich), zweiter Parameter = Attributname der Instanzvariable (mit Unterstrich). Verwechslung führt zu Laufzeitfehlern.
 * **Datentypen:** AICA nutzt die eigene Bibliothek `state_representation` (importiert als `sr`).
     * *Posen:* `sr.CartesianPose("name", "reference_frame")`
     * *Bilder:* `sr.Image()`
@@ -46,15 +47,29 @@ AICA bietet zwei Wege, wie Code ausgeführt wird. **Blockierendes `time.sleep()`
 Jede Python-Komponente benötigt zwingend eine `.json`-Datei im Ordner `component_descriptions`. Diese definiert, wie der Block in der Web-Oberfläche aussieht.
 
 * **WICHTIG:** Das JSON-Schema akzeptiert **nur AICA-spezifische `signal_type` Strings!** Verwende niemals ROS-Typen wie `sensor_msgs/Image` oder `PoseStamped`.
-* **Erlaubte Signal-Typen (Mapping):**
-    * Python `bool` $\rightarrow$ `"signal_type": "bool"`
-    * Python `list` $\rightarrow$ `"signal_type": "double_array"`
-    * `sr.CartesianPose` $\rightarrow$ `"signal_type": "cartesian_pose"`
-* **Komplexe Objekte (Bilder):**
-  Bilder haben keinen Standard-Typ in der UI. Sie müssen als `"other"` deklariert werden, zwingend gefolgt vom C++-Typ:
+
+### Vollständige Signal-Typen (aus AICA Wiki bestätigt)
+
+**Basis-Typen (`signal_type`):**
+| Datentyp | `signal_type` |
+|---|---|
+| `bool` / `Bool` | `"bool"` |
+| `int` / `Int32` | `"int"` |
+| `float` / `Float64` | `"double"` |
+| `list` / `Float64MultiArray` | `"double_array"` |
+| `str` / `String` | `"string"` |
+
+**Zustandstypen (`signal_type`):**
+| Datentyp | `signal_type` |
+|---|---|
+| `sr.CartesianPose` | `"cartesian_pose"` |
+| `sr.JointState` | `"joint_state"` |
+
+**Nicht-native Typen (Custom):**
+Alle anderen ROS2-Nachrichtentypen (z.B. Bilder) müssen als `"other"` deklariert werden, gefolgt vom vollqualifizierten C++-Typ:
   ```json
   "signal_type": "other",
-  "custom_signal_type": "state_representation::Image"
+  "custom_signal_type": "sensor_msgs::msg::Image"
 
 
 ## 5. Strikte Datei- und Verzeichnisstruktur (Ament Build System)
