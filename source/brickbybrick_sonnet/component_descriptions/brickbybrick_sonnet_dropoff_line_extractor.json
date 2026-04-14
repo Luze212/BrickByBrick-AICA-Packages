@@ -36,9 +36,53 @@
   "outputs": [
     {
       "display_name": "Ablageposen-Liste",
-      "description": "Flaches Array aller erkannten 3D-Ablageposen. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird vom MasterListManager übernommen wenn länger als bisherige Liste.",
+      "description": "Flaches Array aller erkannten 3D-Ablageposen. Stride 7: [X,Y,Z,Qx,Qy,Qz,Qw,...]. Wird vom MasterListManager übernommen wenn länger als bisherige Liste.",
       "signal_name": "line_ex_list",
       "signal_type": "double_array"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Tisch-Z-Höhe (mm)",
+      "description": "Z-Koordinate der Tischoberfläche im Weltframe in Millimetern. Wird als Z-Wert für alle erkannten Ablagepositionen verwendet.",
+      "parameter_name": "table_z_world_mm",
+      "parameter_type": "double",
+      "default_value": "170.0"
+    },
+    {
+      "display_name": "Block-Z-Höhe (mm)",
+      "description": "TCP-Z beim Ablegen im Weltframe in Millimetern. Typisch: table_z_world_mm + Steinhöhe (Standard-Steinhöhe: 10 mm).",
+      "parameter_name": "block_z_world_mm",
+      "parameter_type": "double",
+      "default_value": "180.0"
+    },
+    {
+      "display_name": "Block-Länge L (mm)",
+      "description": "Länge des Legosteins in Millimetern. Bestimmt die Schrittweite der Blockplatzierung entlang der Linie.",
+      "parameter_name": "l_mm",
+      "parameter_type": "double",
+      "default_value": "35.0"
+    },
+    {
+      "display_name": "Block-Breite W (mm)",
+      "description": "Breite des Legosteins in Millimetern. Wird für die Kollisionsvermeidung bei der Blockplatzierung verwendet.",
+      "parameter_name": "w_mm",
+      "parameter_type": "double",
+      "default_value": "10.0"
+    },
+    {
+      "display_name": "Schrittweite (mm)",
+      "description": "Abstand zwischen aufeinanderfolgenden Ablagepositionen entlang der Linie in Millimetern (typisch: L * 0.95).",
+      "parameter_name": "step_mm",
+      "parameter_type": "double",
+      "default_value": "33.25"
+    },
+    {
+      "display_name": "Minimale Linienlänge (px)",
+      "description": "Mindestlänge einer erkannten Linie in Pixeln. Kürzere Linien werden verworfen.",
+      "parameter_name": "min_len_px",
+      "parameter_type": "double",
+      "default_value": "30.0"
     }
   ]
 }

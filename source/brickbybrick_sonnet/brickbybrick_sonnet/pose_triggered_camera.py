@@ -24,15 +24,19 @@ from std_msgs.msg import Bool
 
 
 # ── Kamera-Montage-Offset relativ zum TCP ─────────────────────────────────────
-# TO-DO: Werte nach Einmessung der Kameramontage am KUKA eintragen.
-#        Messverfahren: KUKA URDF (Tool-Frame → Kamera-Frame) oder
-#        direkte geometrische Vermessung am Aufbau.
+# Quelle: Magnus RKIM, 14.04.2026 – geometrische Einmessung am Aufbau.
+# Finetuning: Werte hier anpassen, falls nach Testlauf noch ein Restversatz
+#             in den Weltkoordinaten sichtbar ist.
 #
 # Translation: Versatz der Kamera vom TCP-Ursprung im TCP-Frame [m]
-_CAM_OFFSET_XYZ  = [0.0, 0.0, 0.0]       # [tx, ty, tz]  ← TO-DO einmessen
+#              [  tx,      ty,       tz   ]
+_CAM_OFFSET_XYZ  = [-0.0205, 0.01750, -0.072475]   # x: -20.5 mm, y: +17.5 mm, z: -72.5 mm
 #
-# Rotation: Verdrehung der Kamera relativ zur TCP-Ausrichtung [Qx, Qy, Qz, Qw]
-_CAM_OFFSET_QUAT = [0.0, 0.0, 0.0, 1.0]  # Identität (keine Verdrehung)  ← TO-DO einmessen
+# Rotation: Verdrehung der Kamera relativ zur TCP-Ausrichtung.
+#           Format intern scipy [qx, qy, qz, qw] (nicht AICA-native [qw,qx,qy,qz]!)
+#           Entspricht 180° um Z-Achse (Kamera um Hochachse gespiegelt montiert).
+#              [  qx,   qy,   qz,   qw  ]
+_CAM_OFFSET_QUAT = [0.0,  0.0,  1.0,  0.0]         # qz=1, qw=0 → 180° um Z
 
 
 class PoseTriggeredCamera(LifecycleComponent):

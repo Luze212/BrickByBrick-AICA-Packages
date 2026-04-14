@@ -40,7 +40,7 @@
       "description": "ROS 2 Service-Name des JTC set_trajectory Service. In der AICA UI prüfbar via ros2 service list.",
       "parameter_name": "service_name",
       "parameter_type": "string",
-      "default_value": "hardware/joint_trajectory_controller/set_trajectory"
+      "default_value": "/hardware/joint_trajectory_controller/set_trajectory"
     }
   ]
 }
