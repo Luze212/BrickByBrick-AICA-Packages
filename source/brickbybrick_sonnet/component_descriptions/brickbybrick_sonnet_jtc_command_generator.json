@@ -1,8 +1,8 @@
 {
   "name": "JTC Command Generator",
   "description": {
-    "brief": "Berechnet die benötigte Fahrtdauer aus der euklidischen Distanz und sendet einen einmaligen JTC-String-Befehl.",
-    "details": "Empfängt die aktuelle Ist-Pose und eine neue Ziel-Pose. Bei jeder neuen Ziel-Pose (Änderung > 1mm) wird die euklidische Distanz berechnet und durch v_max geteilt (Minimum: 0.5s). Der resultierende Befehlsstring im Format {frames: [frame_name], durations: [time]} wird einmalig als AICA-Output publiziert."
+    "brief": "Berechnet die benötigte Fahrtdauer und sendet einen JTC-Befehl via set_trajectory Service.",
+    "details": "Empfängt die aktuelle Ist-Pose und eine neue Ziel-Pose. Bei jeder neuen Ziel-Pose (Änderung > 1mm) wird die euklidische Distanz berechnet und durch v_max geteilt (Minimum: 0.5s). Der Payload-String im Format {frames: [frame_name], durations: [time]} wird einmalig asynchron über den ROS 2 StringTrigger Service an den JTC gesendet."
   },
   "registration": "brickbybrick_sonnet::JtcCommandGenerator",
   "inherits": "modulo_components::LifecycleComponent",
@@ -34,14 +34,13 @@
       "parameter_name": "target_tf_name",
       "parameter_type": "string",
       "default_value": "mein_ziel_frame"
-    }
-  ],
-  "outputs": [
+    },
     {
-      "display_name": "JTC Command",
-      "description": "Einmaliger Befehlsstring für den JointTrajectoryController. Format: {frames: [frame_name], durations: [time_in_seconds]}.",
-      "signal_name": "jtc_command",
-      "signal_type": "string"
+      "display_name": "JTC Service Name",
+      "description": "ROS 2 Service-Name des JTC set_trajectory Service. In der AICA UI prüfbar via ros2 service list.",
+      "parameter_name": "service_name",
+      "parameter_type": "string",
+      "default_value": "jtc_trigger_service"
     }
   ]
 }

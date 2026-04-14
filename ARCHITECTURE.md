@@ -32,6 +32,43 @@ Objekte kopieren (Achtung C++ Bindings!): Verwende niemals copy.deepcopy() für 
 
 ---
 
+## 3. Service Clients (ROS 2 direkt — nicht durch AICA abstrahiert)
+
+AICA abstrahiert **Publisher und Subscriber** (via `add_output`/`add_input`) sowie **Timer** (via `on_step_callback`). Service Clients sind **nicht** abstrahiert — hier wird der ROS 2 Node direkt genutzt. Das ist kein Verstoß gegen die AICA-Paradigmen:
+
+```python
+from modulo_interfaces.srv import StringTrigger
+
+# In on_configure_callback (nicht in __init__, damit UI-Parameter zuerst gesetzt werden)
+self._my_client = self.create_client(StringTrigger, "/service/name")
+```
+
+**Regeln für Service Calls in on_step_callback:**
+- **Niemals blockierend** — kein `wait_for_service(timeout_sec=X)` im Step
+- Stattdessen nicht-blockierende Prüfung: `self._my_client.service_is_ready()`
+- Aufruf immer via `call_async` + `add_done_callback`:
+
+```python
+def _send_request(self, payload: str):
+    if not self._my_client.service_is_ready():
+        self.get_logger().warn("Service nicht erreichbar.")
+        return
+    req = StringTrigger.Request()
+    req.payload = payload
+    future = self._my_client.call_async(req)
+    future.add_done_callback(self._response_callback)
+
+def _response_callback(self, future):
+    try:
+        response = future.result()
+        if not response.success:
+            self.get_logger().warn(f"Service abgelehnt: {response.message}")
+    except Exception as e:
+        self.get_logger().error(f"Service Call fehlgeschlagen: {e}")
+```
+
+---
+
 ## 3. Ausführungsmodelle (Callbacks)
 AICA bietet zwei Wege, wie Code ausgeführt wird. **Blockierendes `time.sleep()` ist streng verboten**, da es die Node einfriert. Zeitmessungen erfolgen über `(self.get_clock().now() - start_time).nanoseconds / 1e9`.
 
@@ -63,6 +100,13 @@ Jede Python-Komponente benötigt zwingend eine `.json`-Datei im Ordner `componen
 | Datentyp | `signal_type` |
 |---|---|
 | `sr.CartesianPose` | `"cartesian_pose"` |
+| `sr.CartesianTwist` | `"cartesian_twist"` |
+| `sr.CartesianAcceleration` | `"cartesian_acceleration"` |
+| `sr.CartesianWrench` | `"cartesian_wrench"` |
+| `sr.JointPositions` | `"joint_positions"` |
+| `sr.JointVelocities` | `"joint_velocities"` |
+| `sr.JointAccelerations` | `"joint_accelerations"` |
+| `sr.JointTorques` | `"joint_torques"` |
 | `sr.JointState` | `"joint_state"` |
 
 **Nicht-native Typen (Custom):**
@@ -83,6 +127,57 @@ Alle anderen ROS2-Nachrichtentypen (z.B. Bilder) müssen als `"other"` deklarier
 * **Erlaubt (Best Practice):** Um den Ordner mit den JSON-Beschreibungen zu installieren, nutze ausschließlich den nativen CMake-Befehl: 
   `install(DIRECTORY ./component_descriptions DESTINATION .)`
 
+
+## JTC-Integration (Joint Trajectory Controller)
+
+Der JTC ist in AICA Core standardmäßig enthalten und wird über das Hardware-Interface geladen.
+
+### Zwei Wege eine Trajektorie zu setzen
+
+**Weg 1: JointTrajectory-Signal (Topic)**
+Direkt verbunden als Output einer Komponente mit dem JTC-Input. Erfordert **echte Gelenkpositionen in Radiant**:
+
+```python
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+self._trajectory = JointTrajectory()
+self.add_output("trajectory", "_trajectory", JointTrajectory, publish_on_step=False)
+# Manuell triggern (nicht automatisch durch AICA-Engine):
+self.publish_output("trajectory")
+```
+
+**Weg 2: `set_trajectory`-Service (StringTrigger)**
+Nutzt TF-Frame-Namen + AICA-internen IK-Solver. **Kein Zugriff auf Gelenkpositionen nötig.**
+
+- **Service-Typ:** `modulo_interfaces.srv.StringTrigger` ([Quelle](https://github.com/aica-technology/modulo/blob/main/source/modulo_interfaces/srv/StringTrigger.srv))
+
+```
+# StringTrigger.srv
+string payload
+---
+bool success
+string message
+```
+
+Payload-Formate (nur jeweils **eines** von `frames`/`joint_positions` und `durations`/`times_from_start`):
+```
+{frames: [frame_1, frame_2], durations: [2.0]}          # gleiche Duration für alle
+{frames: [frame_1, frame_2], durations: [2.0, 1.5]}     # pro Waypoint
+{frames: [frame_1, frame_2], times_from_start: [2.0, 3.5]}
+{joint_positions: [config_1, config_2], durations: [2.0]}
+```
+
+> Beim Empfang einer neuen Trajektorie wird eine aktive Trajektorie sofort abgebrochen (kein Buffering).
+
+### JTC-Predicates (Ausführungsstatus)
+
+| Predicate | Bedeutung |
+|---|---|
+| `has_active_trajectory` | Trajektorie läuft gerade |
+| `has_trajectory_succeeded` | Trajektorie erfolgreich abgeschlossen |
+| `has_trajectory_failed` | Toleranz verletzt (Zeit oder Position) |
+| `is_trajectory_cancelled` | Manuell abgebrochen |
+
+---
 
 ## AICA SDK — Technische Referenz
 
