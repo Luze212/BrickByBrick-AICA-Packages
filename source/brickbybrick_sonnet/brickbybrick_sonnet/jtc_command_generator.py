@@ -29,6 +29,7 @@ class JtcCommandGenerator(LifecycleComponent):
         # --- INTERNER STATUS ---
         self._jtc_client = None
         self._last_target_pos = None
+        self._pending_command = None  # Befehl wartet einen Zyklus auf TF-Publish
 
     def on_validate_parameter_callback(self, parameter: sr.Parameter) -> bool:
         return True
@@ -39,6 +40,7 @@ class JtcCommandGenerator(LifecycleComponent):
         srv_name = self._service_name.get_value()
         self._jtc_client = self.create_client(StringTrigger, srv_name)
         self._last_target_pos = None
+        self._pending_command = None
         self.get_logger().info(f"JtcCommandGenerator: Konfiguriert. Service: '{srv_name}'")
         return True
 
@@ -48,37 +50,41 @@ class JtcCommandGenerator(LifecycleComponent):
 
     def on_deactivate_callback(self) -> bool:
         self._last_target_pos = None
+        self._pending_command = None
         return True
 
     def on_step_callback(self):
-        # 1. Schutzabfrage: Warten bis echte Roboterdaten da sind
+        # 1. Ausstehenden Befehl aus dem Vorherigen Zyklus senden (TF ist jetzt sicher publiziert)
+        if self._pending_command is not None:
+            self._send_jtc_service_request(self._pending_command)
+            self._pending_command = None
+
+        # 2. Schutzabfrage: Warten bis echte Roboterdaten da sind
         if self._ist_pose.is_empty() or self._target_pose.is_empty():
             return
 
         current_target_pos = self._target_pose.get_position()
 
-        # 2. Flankenauswertung: Nur feuern, wenn sich das Ziel um > 1mm ändert
+        # 3. Flankenauswertung: Nur feuern, wenn sich das Ziel um > 1mm ändert
         if self._last_target_pos is not None:
             dist_to_last_target = np.linalg.norm(current_target_pos - self._last_target_pos)
             if dist_to_last_target < 0.001:
                 return
 
-        # 3. Euklidische Distanz vom aktuellen TCP zum neuen Ziel
+        # 4. Euklidische Distanz vom aktuellen TCP zum neuen Ziel
         robot_pos = self._ist_pose.get_position()
         distance = np.linalg.norm(current_target_pos - robot_pos)
 
-        # 4. Dauer berechnen (Zeit = Strecke / Geschwindigkeit), mind. 0.5s
+        # 5. Dauer berechnen (Zeit = Strecke / Geschwindigkeit), mind. 0.5s
         v_max = self._v_max.get_value()
         if v_max <= 0.0:
             v_max = 0.1
         duration = max(distance / v_max, 0.5)
 
-        # 5. Payload-String zusammenbauen
+        # 6. Payload-String zusammenbauen und für nächsten Zyklus vormerken
+        # (einen Zyklus warten damit Signal-to-Frame den TF-Frame sicher publiziert hat)
         frame_name = self._target_tf_name.get_value()
-        command_string = f"{{frames: [{frame_name}], durations: [{duration:.2f}]}}"
-
-        # 6. Asynchron an den JTC Service senden
-        self._send_jtc_service_request(command_string)
+        self._pending_command = f"{{frames: [{frame_name}], durations: [{duration:.2f}]}}"
 
         # 7. Ziel verriegeln, um Doppelsendung zu verhindern
         self._last_target_pos = current_target_pos.copy()

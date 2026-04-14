@@ -83,3 +83,14 @@ frame5:
     qx: 0.70710678
     qy: 0.70710678
     qz: 0.0
+
+frame6:
+  position:
+    x: 0.295
+    y: 0.0
+    z: 0.57
+  orientation:
+    qw: 0.0
+    qx: 0.0
+    qy: 1.0
+    qz: 0.0
