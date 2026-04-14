@@ -14,6 +14,7 @@ Output-Format line_ex_list:
   Stride 7 pro Ablagepose: [X, Y, Z, Qx, Qy, Qz, Qw, X2, Y2, Z2, ...]
   Quaternion-Reihenfolge: Qx, Qy, Qz, Qw (w am Ende – nicht AICA-native [w,x,y,z])!
   Alle Werte in Metern / Quaternion-Einheiten.
+  AKTUEL!
 """
 
 import matplotlib
