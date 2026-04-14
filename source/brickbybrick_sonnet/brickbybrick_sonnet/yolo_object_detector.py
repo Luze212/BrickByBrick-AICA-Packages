@@ -168,7 +168,7 @@ class YoloObjectDetector(LifecycleComponent):
         )
         height, width = msg.height, msg.width
 
-        results = self._model(image_array, verbose=False)
+        results = self._model(image_array, verbose=False, device='cpu')
 
         corners_flat = []
 
