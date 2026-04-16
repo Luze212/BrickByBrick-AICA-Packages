@@ -5,13 +5,15 @@ Event-getriebener Block. Wartet passiv auf neue Bilder von PoseTriggeredCamera,
 jagt sie durch das YOLOv11-OBB Modell und gibt die 2D-Eckpunkte aller
 erkannten Klötze als flaches Array weiter.
 
-Ablauf (user_callback auf image_in):
-  1. Bild + synchrone Posen ankommen
-  2. YOLO OBB Inferenz
-  3. Rand-Filter: Masken < 5 px vom Bildrand aussortieren
-  4. Eckpunkte in flaches Array packen [u1,v1, u2,v2, u3,v3, u4,v4, ...]
-  5. Posen 1:1 weiterleiten
-  6. yolo_done_trigger = True setzen (on_step_callback setzt ihn nächsten Takt zurück)
+Threading-Architektur (wichtig!):
+  user_callback (_on_new_image) läuft im ROS-Subscriber-Thread.
+  PyTorch ist NICHT thread-safe über Thread-Grenzen hinweg – der Dispatch-Stack
+  wird thread-lokal initialisiert. Deshalb darf die YOLO-Inferenz NICHT im
+  Subscriber-Callback aufgerufen werden.
+
+Ablauf:
+  1. _on_new_image (Subscriber-Thread): Bild + Posen kopieren, Flag setzen
+  2. on_step_callback (Haupt-Thread):   YOLO-Inferenz ausführen, Outputs schreiben
 
 Array-Format Ausgang yolo_corners_list:
   Stride 8 pro Klotz: [u1, v1, u2, v2, u3, v3, u4, v4, u1_B, v1_B, ...]
@@ -89,6 +91,15 @@ class YoloObjectDetector(LifecycleComponent):
         # ── Internes Modell-Handle (persistent, über Taktzyklen hinweg) ───────
         self._model = None      # wird in on_configure_callback geladen
 
+        # ── Bild-Puffer: vom Subscriber-Thread befüllt, von on_step_callback gelesen ──
+        # Kein Mutex nötig: AICA serialisiert Callbacks und Step innerhalb des Nodes.
+        self._pending_image_array = None   # np.ndarray oder None
+        self._pending_image_width: int = 0
+        self._pending_image_height: int = 0
+        self._pending_ist_pose = None      # sr.CartesianPose-Klon oder None
+        self._pending_cam_pose = None      # sr.CartesianPose-Klon oder None
+        self._new_image_pending: bool = False
+
     # ─────────────────────────────────────────────────────────────────────────
     # Lifecycle-Callbacks
     # ─────────────────────────────────────────────────────────────────────────
@@ -120,6 +131,10 @@ class YoloObjectDetector(LifecycleComponent):
             return False
 
         self._yolo_done_trigger = False
+        self._new_image_pending = False
+        self._pending_image_array = None
+        self._pending_ist_pose = None
+        self._pending_cam_pose = None
         return True
 
     def on_activate_callback(self) -> bool:
@@ -132,41 +147,31 @@ class YoloObjectDetector(LifecycleComponent):
         return True
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Taktschleife – nur für yolo_done_trigger Flanken-Reset
+    # Taktschleife – YOLO-Inferenz im Haupt-Thread (PyTorch-Thread-Sicherheit)
     # ─────────────────────────────────────────────────────────────────────────
 
     def on_step_callback(self):
-        # Verzögerter Reset: erst im übernächsten Takt zurücksetzen,
-        # damit AICA beim Publish noch True sieht.
+        # ── YOLO-Inferenz: nur wenn ein neues Bild vorliegt ──────────────────
+        if self._new_image_pending:
+            self._new_image_pending = False
+            self._run_yolo_inference()
+
+        # ── Verzögerter Trigger-Reset ─────────────────────────────────────────
+        # Erst im übernächsten Takt zurücksetzen, damit AICA beim Publish noch True sieht.
         if self._reset_trigger_next_step:
             self._yolo_done_trigger = False
             self._reset_trigger_next_step = False
         elif self._yolo_done_trigger:
             self._reset_trigger_next_step = True
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Event-Callback: neues (eingefrorenes) Bild von PoseTriggeredCamera
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _on_new_image(self):
-        if self._model is None:
-            self.get_logger().warn(
-                "YoloObjectDetector: Bild empfangen, aber Modell noch nicht geladen."
-            )
-            return
-
-        # ── Bilddaten extrahieren ─────────────────────────────────────────────
-        msg = self._image_in
-        if not msg.data:
-            self.get_logger().warn(
-                "YoloObjectDetector: Leeres Bild empfangen – überspringe Inferenz."
-            )
-            return
-
-        image_array = np.frombuffer(msg.data, dtype=np.uint8).reshape(
-            (msg.height, msg.width, -1)
-        )
-        height, width = msg.height, msg.width
+    def _run_yolo_inference(self):
+        """
+        YOLO-Inferenz im Haupt-Component-Thread (aufgerufen von on_step_callback).
+        PyTorchs Dispatch-Stack ist hier korrekt initialisiert.
+        """
+        image_array = self._pending_image_array
+        height = self._pending_image_height
+        width = self._pending_image_width
 
         results = self._model(image_array, verbose=False, device='cpu')
 
@@ -194,12 +199,11 @@ class YoloObjectDetector(LifecycleComponent):
 
         self._yolo_corners_list = corners_flat
 
-        # ── Posen synchron 1:1 weiterleiten ──────────────────────────────────
-        if not self._ist_pose_in.is_empty():
-            self._ist_pose_out = sr.CartesianPose(self._ist_pose_in)
-
-        if not self._cam_ist_pose_in.is_empty():
-            self._cam_ist_pose_out = sr.CartesianPose(self._cam_ist_pose_in)
+        # ── Posen aus dem gespeicherten Snapshot weiterleiten ────────────────
+        if self._pending_ist_pose is not None:
+            self._ist_pose_out = self._pending_ist_pose
+        if self._pending_cam_pose is not None:
+            self._cam_ist_pose_out = self._pending_cam_pose
 
         # ── Trigger setzen (on_step_callback setzt ihn nächsten Takt zurück) ──
         self._yolo_done_trigger = True
@@ -207,3 +211,42 @@ class YoloObjectDetector(LifecycleComponent):
             f"YoloObjectDetector: Inferenz abgeschlossen – "
             f"{len(corners_flat) // 8} Klotz/Klötze nach Rand-Filter erkannt."
         )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Event-Callback: neues (eingefrorenes) Bild von PoseTriggeredCamera
+    # Läuft im ROS-Subscriber-Thread → NUR Datenkopie, KEIN PyTorch!
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _on_new_image(self):
+        if self._model is None:
+            self.get_logger().warn(
+                "YoloObjectDetector: Bild empfangen, aber Modell noch nicht geladen."
+            )
+            return
+
+        msg = self._image_in
+        if not msg.data:
+            self.get_logger().warn(
+                "YoloObjectDetector: Leeres Bild empfangen – überspringe Inferenz."
+            )
+            return
+
+        # ── Bild als eigene Kopie sichern (Buffer kann nach Callback ungültig werden) ──
+        self._pending_image_array = np.frombuffer(msg.data, dtype=np.uint8).reshape(
+            (msg.height, msg.width, -1)
+        ).copy()
+        self._pending_image_height = msg.height
+        self._pending_image_width = msg.width
+
+        # ── Posen synchron zum Bild einfrieren (PoseTriggeredCamera-Snapshot) ──
+        self._pending_ist_pose = (
+            sr.CartesianPose(self._ist_pose_in)
+            if not self._ist_pose_in.is_empty() else None
+        )
+        self._pending_cam_pose = (
+            sr.CartesianPose(self._cam_ist_pose_in)
+            if not self._cam_ist_pose_in.is_empty() else None
+        )
+
+        # ── Flag für on_step_callback setzen ─────────────────────────────────
+        self._new_image_pending = True
