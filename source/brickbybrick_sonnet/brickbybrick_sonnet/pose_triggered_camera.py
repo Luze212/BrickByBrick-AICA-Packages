@@ -36,7 +36,7 @@ _CAM_OFFSET_XYZ  = [-0.0205, 0.01750, -0.072475]   # x: -20.5 mm, y: +17.5 mm, z
 #           Format intern scipy [qx, qy, qz, qw] (nicht AICA-native [qw,qx,qy,qz]!)
 #           Entspricht 180° um Z-Achse (Kamera um Hochachse gespiegelt montiert).
 #              [  qx,   qy,   qz,   qw  ]
-_CAM_OFFSET_QUAT = [0.0,  0.0,  1.0,  0.0]         # qz=1, qw=0 → 180° um Z
+_CAM_OFFSET_QUAT = [0.0,  0.0, -0.7071,  0.7071]         # qz=1, qw=0 → 180° um Z
 
 
 class PoseTriggeredCamera(LifecycleComponent):

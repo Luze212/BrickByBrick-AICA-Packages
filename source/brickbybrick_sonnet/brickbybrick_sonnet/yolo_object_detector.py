@@ -220,7 +220,7 @@ class YoloObjectDetector(LifecycleComponent):
 
         self._yolo_corners_list = corners_flat
 
-        # ── Posen aus dem gespeicherten Snapshot weiterleiten ────────────────
+        # ── Posen aus dem synchron gespeicherten Snapshot weiterleiten ───────
         if self._pending_ist_pose is not None:
             self._ist_pose_out = self._pending_ist_pose
         if self._pending_cam_pose is not None:
