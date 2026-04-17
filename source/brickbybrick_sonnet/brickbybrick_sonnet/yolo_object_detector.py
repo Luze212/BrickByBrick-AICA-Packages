@@ -2,8 +2,13 @@
 YoloObjectDetector
 ─────────────────────────────────────────────────────────────────────────────
 Event-getriebener Block. Wartet passiv auf neue Bilder von PoseTriggeredCamera,
-jagt sie durch das YOLOv11-OBB Modell und gibt die 2D-Eckpunkte aller
+jagt sie durch das YOLOv11-Seg Modell und gibt die 2D-Eckpunkte aller
 erkannten Klötze als flaches Array weiter.
+
+Modell-Typ: yolo11m-seg (Instanz-Segmentierung, kein OBB).
+  Aus jeder Segmentierungsmaske wird via cv2.minAreaRect eine rotierte
+  Bounding Box berechnet. Das Ausgabeformat bleibt Stride-8 (4 Ecken × 2
+  Koordinaten), identisch zum OBB-Format für den Rest der Pipeline.
 
 Threading-Architektur (wichtig!):
   user_callback (_on_new_image) läuft im ROS-Subscriber-Thread.
@@ -29,6 +34,7 @@ except Exception:
     _SHARE = "."
 
 _DEFAULT_MODEL_PATH = os.path.join(_SHARE, "data", "model", "best.pt")
+import cv2
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
@@ -178,39 +184,41 @@ class YoloObjectDetector(LifecycleComponent):
         # das Modell vertauschte R↔B Kanäle und erkennt nichts.
         image_bgr = image_array[:, :, ::-1]
 
-        # DEBUG: Confidence auf 0.01 um zu prüfen ob das Modell überhaupt etwas sieht
-        results = self._model(image_bgr, verbose=False, device='cpu', conf=0.01)
+        results = self._model(image_bgr, verbose=False, device='cpu')
 
         corners_flat = []
 
-        if results and len(results) > 0 and results[0].obb is not None:
-            obb = results[0].obb
-
-            # DEBUG: Raw-Count vor Rand-Filter
+        # ── Segmentierungsmasken auswerten ───────────────────────────────────
+        # Modell ist yolo11m-seg (Segmentierung, kein OBB).
+        # Aus jeder Maske wird via cv2.minAreaRect eine rotierte Bounding Box
+        # abgeleitet – das Ausgabeformat (Stride 8: 4 Ecken × 2 Koordinaten)
+        # bleibt identisch mit dem OBB-Format für den Rest der Pipeline.
+        if results and len(results) > 0 and results[0].masks is not None:
+            masks_xy = results[0].masks.xy   # Liste von np.arrays (N_pts, 2) in Bildkoordinaten
             self.get_logger().info(
-                f"YoloObjectDetector DEBUG: {len(obb)} Rohdetektionen vor Rand-Filter"
+                f"YoloObjectDetector: {len(masks_xy)} Rohdetektionen (Segm.) vor Rand-Filter"
             )
 
-            if len(obb) > 0:
-                all_corners = obb.xyxyxyxy.cpu().numpy()   # shape: (N, 4, 2)
+            for mask_xy in masks_xy:
+                if len(mask_xy) < 5:
+                    continue
 
-                for box_corners in all_corners:
-                    # ── Rand-Filter: Klotz aussortieren wenn Ecke < 5 px vom Rand
-                    on_border = False
-                    for (u, v) in box_corners:
-                        if u < 5 or u > width - 5 or v < 5 or v > height - 5:
-                            on_border = True
-                            break
-                    if on_border:
-                        continue
+                pts = mask_xy.astype(np.float32).reshape(-1, 1, 2)
+                rect = cv2.minAreaRect(pts)           # ((cx,cy), (w,h), angle)
+                box_corners = cv2.boxPoints(rect)     # (4, 2) – rotierte Ecken
 
-                    # ── Eckpunkte in flaches Array packen (Stride 8) ──────────
-                    for (u, v) in box_corners:
-                        corners_flat.extend([float(u), float(v)])
-        else:
-            self.get_logger().info(
-                "YoloObjectDetector DEBUG: 0 Rohdetektionen – Modell erkennt gar nichts"
-            )
+                # ── Rand-Filter: Klotz aussortieren wenn Ecke < 5 px vom Rand
+                on_border = False
+                for (u, v) in box_corners:
+                    if u < 5 or u > width - 5 or v < 5 or v > height - 5:
+                        on_border = True
+                        break
+                if on_border:
+                    continue
+
+                # ── Eckpunkte in flaches Array packen (Stride 8) ──────────────
+                for (u, v) in box_corners:
+                    corners_flat.extend([float(u), float(v)])
 
         self._yolo_corners_list = corners_flat
 
