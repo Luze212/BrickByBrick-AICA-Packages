@@ -173,12 +173,22 @@ class YoloObjectDetector(LifecycleComponent):
         height = self._pending_image_height
         width = self._pending_image_width
 
-        results = self._model(image_array, verbose=False, device='cpu')
+        # ── BGR-Konvertierung: ROS/Simulator publiziert rgb8, YOLO erwartet BGR ──
+        # Ultralytics wendet intern BGR→RGB an. Ohne diese Konvertierung sieht
+        # das Modell vertauschte R↔B Kanäle und erkennt nichts.
+        image_bgr = image_array[:, :, ::-1]
+
+        results = self._model(image_bgr, verbose=False, device='cpu')
 
         corners_flat = []
 
         if results and len(results) > 0 and results[0].obb is not None:
             obb = results[0].obb
+
+            # DEBUG: Raw-Count vor Rand-Filter
+            self.get_logger().info(
+                f"YoloObjectDetector DEBUG: {len(obb)} Rohdetektionen vor Rand-Filter"
+            )
 
             if len(obb) > 0:
                 all_corners = obb.xyxyxyxy.cpu().numpy()   # shape: (N, 4, 2)
@@ -196,6 +206,10 @@ class YoloObjectDetector(LifecycleComponent):
                     # ── Eckpunkte in flaches Array packen (Stride 8) ──────────
                     for (u, v) in box_corners:
                         corners_flat.extend([float(u), float(v)])
+        else:
+            self.get_logger().info(
+                "YoloObjectDetector DEBUG: 0 Rohdetektionen – Modell erkennt gar nichts"
+            )
 
         self._yolo_corners_list = corners_flat
 
