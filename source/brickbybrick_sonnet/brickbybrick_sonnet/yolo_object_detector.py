@@ -105,6 +105,7 @@ class YoloObjectDetector(LifecycleComponent):
         self._pending_ist_pose = None      # sr.CartesianPose-Klon oder None
         self._pending_cam_pose = None      # sr.CartesianPose-Klon oder None
         self._new_image_pending: bool = False
+        self._last_image_stamp: tuple = (-1, -1)   # (sec, nanosec) des zuletzt verarbeiteten Snapshots
 
     # ─────────────────────────────────────────────────────────────────────────
     # Lifecycle-Callbacks
@@ -141,6 +142,7 @@ class YoloObjectDetector(LifecycleComponent):
         self._pending_image_array = None
         self._pending_ist_pose = None
         self._pending_cam_pose = None
+        self._last_image_stamp = (-1, -1)
         return True
 
     def on_activate_callback(self) -> bool:
@@ -195,10 +197,6 @@ class YoloObjectDetector(LifecycleComponent):
         # bleibt identisch mit dem OBB-Format für den Rest der Pipeline.
         if results and len(results) > 0 and results[0].masks is not None:
             masks_xy = results[0].masks.xy   # Liste von np.arrays (N_pts, 2) in Bildkoordinaten
-            self.get_logger().info(
-                f"YoloObjectDetector: {len(masks_xy)} Rohdetektionen (Segm.) vor Rand-Filter"
-            )
-
             for mask_xy in masks_xy:
                 if len(mask_xy) < 5:
                     continue
@@ -254,21 +252,20 @@ class YoloObjectDetector(LifecycleComponent):
             )
             return
 
+        # ── Duplikat-Filter: PoseTriggeredCamera publiziert denselben Snapshot
+        # jeden Takt erneut. Der ROS-Timestamp identifiziert eindeutig ob ein
+        # neuer Snapshot vorliegt – nur dann YOLO auslösen.
+        stamp = (msg.header.stamp.sec, msg.header.stamp.nanosec)
+        if stamp == self._last_image_stamp:
+            return
+        self._last_image_stamp = stamp
+
         # ── Bild als eigene Kopie sichern (Buffer kann nach Callback ungültig werden) ──
-        raw = np.frombuffer(msg.data, dtype=np.uint8)
-        self._pending_image_array = raw.reshape((msg.height, msg.width, -1)).copy()
+        self._pending_image_array = np.frombuffer(msg.data, dtype=np.uint8).reshape(
+            (msg.height, msg.width, -1)
+        ).copy()
         self._pending_image_height = msg.height
         self._pending_image_width = msg.width
-
-        # DEBUG: Bild-Metadaten loggen um Format-Probleme zu erkennen
-        self.get_logger().info(
-            f"YoloObjectDetector DEBUG image: encoding={msg.encoding} "
-            f"size={msg.width}x{msg.height} "
-            f"channels={self._pending_image_array.shape[2] if self._pending_image_array.ndim == 3 else 'N/A'} "
-            f"dtype={self._pending_image_array.dtype} "
-            f"mean={self._pending_image_array.mean():.1f} "
-            f"min={self._pending_image_array.min()} max={self._pending_image_array.max()}"
-        )
 
         # ── Posen synchron zum Bild einfrieren (PoseTriggeredCamera-Snapshot) ──
         self._pending_ist_pose = (
