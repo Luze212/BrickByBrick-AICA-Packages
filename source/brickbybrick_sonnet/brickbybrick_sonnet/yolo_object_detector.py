@@ -178,7 +178,8 @@ class YoloObjectDetector(LifecycleComponent):
         # das Modell vertauschte R↔B Kanäle und erkennt nichts.
         image_bgr = image_array[:, :, ::-1]
 
-        results = self._model(image_bgr, verbose=False, device='cpu')
+        # DEBUG: Confidence auf 0.01 um zu prüfen ob das Modell überhaupt etwas sieht
+        results = self._model(image_bgr, verbose=False, device='cpu', conf=0.01)
 
         corners_flat = []
 
@@ -246,11 +247,20 @@ class YoloObjectDetector(LifecycleComponent):
             return
 
         # ── Bild als eigene Kopie sichern (Buffer kann nach Callback ungültig werden) ──
-        self._pending_image_array = np.frombuffer(msg.data, dtype=np.uint8).reshape(
-            (msg.height, msg.width, -1)
-        ).copy()
+        raw = np.frombuffer(msg.data, dtype=np.uint8)
+        self._pending_image_array = raw.reshape((msg.height, msg.width, -1)).copy()
         self._pending_image_height = msg.height
         self._pending_image_width = msg.width
+
+        # DEBUG: Bild-Metadaten loggen um Format-Probleme zu erkennen
+        self.get_logger().info(
+            f"YoloObjectDetector DEBUG image: encoding={msg.encoding} "
+            f"size={msg.width}x{msg.height} "
+            f"channels={self._pending_image_array.shape[2] if self._pending_image_array.ndim == 3 else 'N/A'} "
+            f"dtype={self._pending_image_array.dtype} "
+            f"mean={self._pending_image_array.mean():.1f} "
+            f"min={self._pending_image_array.min()} max={self._pending_image_array.max()}"
+        )
 
         # ── Posen synchron zum Bild einfrieren (PoseTriggeredCamera-Snapshot) ──
         self._pending_ist_pose = (
