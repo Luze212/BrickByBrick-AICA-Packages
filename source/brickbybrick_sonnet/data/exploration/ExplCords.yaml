@@ -86,9 +86,9 @@ frame5:
 
 frame6:
   position:
-    x: 0.295
+    x: 0.25
     y: 0.0
-    z: 0.57
+    z: 0.50
   orientation:
     qw: 0.0
     qx: 0.0
