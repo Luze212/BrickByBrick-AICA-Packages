@@ -1875,10 +1875,10 @@ class DropoffLineExtractor(LifecycleComponent):
         for b in run_out['blocks_world']:
             x_m, y_m, z_m = [v / 1000.0 for v in b['center_world_mm']]
             yaw = b['yaw_world_rad']
-            qx = 0.0
-            qy = 0.0
-            qz = float(np.sin(yaw / 2.0))
-            qw = float(np.cos(yaw / 2.0))
+            qx = float(np.sin(yaw / 2.0))
+            qy = float(np.cos(yaw / 2.0))
+            qz = 0.0
+            qw = 0.0
             flat.extend([x_m, y_m, z_m, qx, qy, qz, qw])
 
         self._line_ex_list = flat
