@@ -29,6 +29,8 @@ Sub-Zustände (self._sub_state):
   EXECUTE_PLACE:   APPROACH_DROP → RELEASE_DELAY → APPROACH_RETRACT
 """
 
+from scipy.spatial.transform import Rotation
+
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
@@ -39,6 +41,11 @@ from std_msgs.msg import Bool, Float64MultiArray
 # ── Hardware-Konstanten ───────────────────────────────────────────────────────
 # TCP = Saugnapf-Kontaktpunkt (mit Anschlag bereits eingerechnet) → kein Offset
 _Z_SAUGER_M = 0.0
+
+# Kamera-Montage-Offset relativ zum TCP, im TCP-Frame [m].
+# Muss synchron zu pose_triggered_camera._CAM_OFFSET_XYZ gehalten werden!
+# Quelle: Magnus RKIM, 14.04.2026 – geometrische Einmessung.
+_CAM_OFFSET_XYZ = [-0.0205, 0.01750, -0.072475]
 
 # Home-Pose = frame3 aus ExplCords.yaml
 _HOME_POSITION    = [0.295, 0.0, 0.57]    # [X, Y, Z] in Meter
@@ -274,6 +281,7 @@ class PickPlaceController(LifecycleComponent):
         if traj_rising:
             self._take_img_out = True
             self._transition("WAIT_IMG_1")
+            self._prev_mlm_done_trigger = True  # ignoriere hängende Pulse aus Exploration/DLE
 
     # ─────────────────────────────────────────────────────────────────────────
     # Zustand: WAIT_IMG_1 (Grob-Auswertung + Tiefen-Berechnung)
@@ -331,13 +339,14 @@ class PickPlaceController(LifecycleComponent):
             f"(Parameter pick_z_mm={self._pick_z_mm.get_value():.1f})."
         )
 
-        # TO-DO: Kamera-TCP-Versatz aufaddieren (nach Einmessung von _CAM_OFFSET_XYZ).
-        # Damit fährt die Kamera (nicht der Sauger) über den Klotz, sodass
-        # WAIT_IMG_2 ein zentriertes Nahbild liefert.
-        # Korrektur: X_hover = X_b - R_tcp * _CAM_OFFSET_XYZ[0]
-        #            Y_hover = Y_b - R_tcp * _CAM_OFFSET_XYZ[1]
-        X_hover = X_b   # ← TO-DO: Kameraversatz eintragen sobald eingemessen
-        Y_hover = Y_b   # ← TO-DO: Kameraversatz eintragen sobald eingemessen
+        # Hover-Pose so versetzen, dass die KAMERA (nicht der Sauger) über
+        # dem Klotz steht – sonst sieht WAIT_IMG_2 nichts.
+        # Modell: cam_world = tcp_world + R_tcp · _CAM_OFFSET_XYZ
+        # → tcp.xy = klotz.xy − (R_tcp · _CAM_OFFSET_XYZ).xy
+        # quat ist scipy-Format [qx, qy, qz, qw] (so liegt es in filtered_yolo).
+        cam_off_world = Rotation.from_quat(quat).apply(_CAM_OFFSET_XYZ)
+        X_hover = X_b - float(cam_off_world[0])
+        Y_hover = Y_b - float(cam_off_world[1])
 
         # Hover-Pose setzen und weiterfahren
         hover_z = self._z_pick + self._hover_height.get_value()
@@ -359,6 +368,7 @@ class PickPlaceController(LifecycleComponent):
         if traj_rising:
             self._take_img_out = True
             self._transition("WAIT_IMG_2")
+            self._prev_mlm_done_trigger = True  # ignoriere hängende Pulse aus vorherigem Zyklus
 
     # ─────────────────────────────────────────────────────────────────────────
     # Zustand: WAIT_IMG_2 (Fein-Auswertung vom zentrierten Hover-Bild)
@@ -387,8 +397,13 @@ class PickPlaceController(LifecycleComponent):
                 best_brick = [float(v) for v in filt[i:i + 9]]
 
         if best_brick is None:
+            # Übersichtspose verwerfen, damit wir nicht endlos zurückkehren.
+            # Mögliche Ursachen: Kameraversatz unpräzise, Klotz weggerollt,
+            # YOLO-Rand-Filter zu aggressiv.
+            self._master_overview_local = self._master_overview_local[7:]
             self.get_logger().warn(
                 "PickPlaceController: WAIT_IMG_2 – kein Klotz im Hover-Bild. "
+                f"Übersichtspose verworfen ({len(self._master_overview_local) // 7} verbleiben). "
                 "Zurück zu CHECK_LISTS."
             )
             self._transition("CHECK_LISTS")
