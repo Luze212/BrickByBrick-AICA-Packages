@@ -45,14 +45,14 @@
     },
     {
       "display_name": "Tiefenbild",
-      "description": "Echtzeit-Tiefenbild der Kamera. Wird in WAIT_IMG_1 und WAIT_IMG_2 ausgewertet um Z_pick (exakte Klotz-Höhe) zu bestimmen.",
+      "description": "Echtzeit-Tiefenbild der Kamera. Reserviert für spätere Integration – aktuell ohne Funktion (Z_pick wird über Parameter pick_z_mm gesetzt).",
       "signal_name": "depth_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
     },
     {
       "display_name": "Ist-Pose (Kamera)",
-      "description": "Kamerapose im Weltframe als Echtzeit-Stream. Wird für depth_to_world_z (Z_pick-Berechnung) in WAIT_IMG_1 und WAIT_IMG_2 benötigt.",
+      "description": "Kamerapose im Weltframe. Reserviert für spätere Integration zusammen mit Tiefenbild – aktuell ohne Funktion.",
       "signal_name": "cam_ist_pose",
       "signal_type": "cartesian_pose"
     }
@@ -64,6 +64,13 @@
       "parameter_name": "hover_height",
       "parameter_type": "double",
       "default_value": "0.15"
+    },
+    {
+      "display_name": "Pick-Höhe (fest)",
+      "description": "Feste Z-Koordinate der Pick-Pose im Weltframe [mm]. Ersetzt die Tiefenbild-Berechnung. Standard: 184 mm (Klotz auf Tisch bei Z_table=170 mm + 14 mm Klotz-Höhe).",
+      "parameter_name": "pick_z_mm",
+      "parameter_type": "double",
+      "default_value": "184.0"
     }
   ],
   "outputs": [

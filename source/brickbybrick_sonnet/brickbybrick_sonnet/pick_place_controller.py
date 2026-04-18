@@ -29,20 +29,16 @@ Sub-Zustände (self._sub_state):
   EXECUTE_PLACE:   APPROACH_DROP → RELEASE_DELAY → APPROACH_RETRACT
 """
 
-import numpy as np
 import state_representation as sr
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
 from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import Bool, Float64MultiArray
-from brickbybrick_sonnet.geometry_utils import depth_to_world_z
-
 
 # ── Hardware-Konstanten ───────────────────────────────────────────────────────
 # TCP = Saugnapf-Kontaktpunkt (mit Anschlag bereits eingerechnet) → kein Offset
-_Z_SAUGER_M     = 0.0
-_Z_PICK_DEFAULT = 0.02     # Fallback Pick-Höhe bis Tiefenkamera kalibriert ist
+_Z_SAUGER_M = 0.0
 
 # Home-Pose = frame3 aus ExplCords.yaml
 _HOME_POSITION    = [0.295, 0.0, 0.57]    # [X, Y, Z] in Meter
@@ -82,17 +78,12 @@ class PickPlaceController(LifecycleComponent):
         self._cam_ist_pose = sr.CartesianPose("cam_ist_pose", "world")
         self.add_input("cam_ist_pose", "_cam_ist_pose", EncodedState)
 
-        # ── Kamera-Linsenparameter (Klassenvariablen, kein AICA-Parameter) ──────
-        # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]  – D435i 640×480
-        # Bei Auflösungswechsel hier anpassen (exakte Werte: RealSense Viewer → Intrinsics)
-        self._cam_fx = 322.0   # Brennweite X [px]
-        self._cam_fy = 322.0   # Brennweite Y [px]
-        self._cam_cx = 320.0   # Hauptpunkt X [px]
-        self._cam_cy = 240.0   # Hauptpunkt Y [px]
-
         # ── Rekonfigurierbare Parameter ───────────────────────────────────────
         self._hover_height = sr.Parameter("hover_height", 0.15, sr.ParameterType.DOUBLE)
         self.add_parameter("_hover_height", "Hover-Abstand über Klotz/Ablage [m] – nach Testlauf anpassen")
+
+        self._pick_z_mm = sr.Parameter("pick_z_mm", 184.0, sr.ParameterType.DOUBLE)
+        self.add_parameter("_pick_z_mm", "Feste Pick-Höhe im Weltframe [mm] – ersetzt Tiefenbild-Berechnung")
 
         # ── Outputs ───────────────────────────────────────────────────────────
         self._target_pose_out = sr.CartesianPose("target_pose_out", "world")
@@ -121,7 +112,7 @@ class PickPlaceController(LifecycleComponent):
         self._prev_mlm_done_trigger: bool = False
 
         # ── Zustandsvariablen (persistent über Taktzyklen) ───────────────────
-        self._z_pick: float = _Z_PICK_DEFAULT
+        self._z_pick: float = self._pick_z_mm.get_value() / 1000.0
         # _current_brick: ausschließlich 9-Elemente-Format
         # [X, Y, Area, u_center, v_center, Qx, Qy, Qz, Qw]
         self._current_brick: list = []
@@ -149,7 +140,7 @@ class PickPlaceController(LifecycleComponent):
         self._prev_mlm_done_trigger = False
         self._master_overview_local = []
         self._master_dropoff_local = []
-        self._z_pick = _Z_PICK_DEFAULT
+        self._z_pick = self._pick_z_mm.get_value() / 1000.0
         self._current_brick = []
         self._retract_pose_local = []
         self.get_logger().info("PickPlaceController: Konfiguriert – Zustand INIT.")
@@ -333,43 +324,12 @@ class PickPlaceController(LifecycleComponent):
         Y_b  = best_brick[1]
         quat = best_brick[5:9]  # [Qx, Qy, Qz, Qw]
 
-        # ── Tiefenbild auswerten → Z_pick ────────────────────────────────────
-        msg = self._depth_image
-        if msg.data and not self._cam_ist_pose.is_empty():
-            depth_array = np.frombuffer(msg.data, dtype=np.uint16).reshape(
-                (msg.height, msg.width)
-            )
-            u_i = int(round(u_c))
-            v_i = int(round(v_c))
-            patch = depth_array[max(0, v_i - 2):v_i + 3, max(0, u_i - 2):u_i + 3]
-            raw_median = float(np.median(patch))
-            if raw_median > 0.0:
-                depth_m = raw_median / 1000.0   # uint16 mm → Meter
-                cam_pos  = list(self._cam_ist_pose.get_position())
-                cam_ori  = self._cam_ist_pose.get_orientation()
-                cam_quat = [float(cam_ori[0]), float(cam_ori[1]),
-                            float(cam_ori[2]), float(cam_ori[3])]
-                self._z_pick = depth_to_world_z(
-                    u_c, v_c, depth_m,
-                    self._cam_fx, self._cam_fy,
-                    self._cam_cx, self._cam_cy,
-                    cam_pos, cam_quat,
-                )
-                self.get_logger().info(
-                    f"PickPlaceController: WAIT_IMG_1 – Z_pick={self._z_pick:.4f} m "
-                    f"(depth_raw={raw_median:.0f} mm)."
-                )
-            else:
-                self._z_pick = _Z_PICK_DEFAULT
-                self.get_logger().warn(
-                    f"PickPlaceController: WAIT_IMG_1 – Tiefenpatch = 0, Fallback {self._z_pick} m."
-                )
-        else:
-            self._z_pick = _Z_PICK_DEFAULT
-            self.get_logger().warn(
-                f"PickPlaceController: WAIT_IMG_1 – Kein Tiefenbild/keine Kamerapose, "
-                f"Fallback {self._z_pick} m."
-            )
+        # ── Z_pick aus festem Parameter ───────────────────────────────────────
+        self._z_pick = self._pick_z_mm.get_value() / 1000.0
+        self.get_logger().info(
+            f"PickPlaceController: WAIT_IMG_1 – Z_pick={self._z_pick:.4f} m "
+            f"(Parameter pick_z_mm={self._pick_z_mm.get_value():.1f})."
+        )
 
         # TO-DO: Kamera-TCP-Versatz aufaddieren (nach Einmessung von _CAM_OFFSET_XYZ).
         # Damit fährt die Kamera (nicht der Sauger) über den Klotz, sodass
@@ -440,43 +400,12 @@ class PickPlaceController(LifecycleComponent):
         v_c    = best_brick[4]
         quat   = best_brick[5:9]  # [Qx, Qy, Qz, Qw]
 
-        # ── Fix M-5: Z_pick aus frischem Hover-Tiefenbild aktualisieren ─────────
-        # Das Hover-Bild ist deutlich näher → präzisere Tiefenmessung.
-        msg = self._depth_image
-        if msg.data and not self._cam_ist_pose.is_empty():
-            depth_array = np.frombuffer(msg.data, dtype=np.uint16).reshape(
-                (msg.height, msg.width)
-            )
-            u_i = int(round(u_c))
-            v_i = int(round(v_c))
-            patch = depth_array[max(0, v_i - 2):v_i + 3, max(0, u_i - 2):u_i + 3]
-            raw_median = float(np.median(patch))
-            if raw_median > 0.0:
-                depth_m = raw_median / 1000.0   # uint16 mm → Meter
-                cam_pos  = list(self._cam_ist_pose.get_position())
-                cam_ori  = self._cam_ist_pose.get_orientation()
-                cam_quat = [float(cam_ori[0]), float(cam_ori[1]),
-                            float(cam_ori[2]), float(cam_ori[3])]
-                self._z_pick = depth_to_world_z(
-                    u_c, v_c, depth_m,
-                    self._cam_fx, self._cam_fy,
-                    self._cam_cx, self._cam_cy,
-                    cam_pos, cam_quat,
-                )
-                self.get_logger().info(
-                    f"PickPlaceController: WAIT_IMG_2 – Z_pick={self._z_pick:.4f} m "
-                    f"(depth_raw={raw_median:.0f} mm)."
-                )
-            else:
-                self.get_logger().warn(
-                    f"PickPlaceController: WAIT_IMG_2 – Tiefenpatch = 0, "
-                    f"behalte Z_pick={self._z_pick:.4f} m aus WAIT_IMG_1."
-                )
-        else:
-            self.get_logger().warn(
-                f"PickPlaceController: WAIT_IMG_2 – Kein Tiefenbild/keine Kamerapose, "
-                f"behalte Z_pick={self._z_pick:.4f} m aus WAIT_IMG_1."
-            )
+        # ── Z_pick aus festem Parameter (Tiefenbild noch nicht aktiv) ────────
+        self._z_pick = self._pick_z_mm.get_value() / 1000.0
+        self.get_logger().info(
+            f"PickPlaceController: WAIT_IMG_2 – Z_pick={self._z_pick:.4f} m "
+            f"(Parameter pick_z_mm={self._pick_z_mm.get_value():.1f})."
+        )
 
         # ── Pick-Pose und Retract-Pose generieren ─────────────────────────────
         z_pick    = self._z_pick
