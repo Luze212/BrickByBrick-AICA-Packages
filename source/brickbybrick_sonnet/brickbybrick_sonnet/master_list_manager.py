@@ -41,12 +41,12 @@ class MasterListManager(LifecycleComponent):
         super().__init__(node_name, *args, **kwargs)
 
         # ── Kamera-Linsenparameter (Klassenvariablen, kein AICA-Parameter) ─────
-        # K = [322, 0, 320; 0, 322, 240; 0, 0, 1]  – D435i 640×480
-        # Bei Auflösungswechsel hier anpassen (exakte Werte: RealSense Viewer → Intrinsics)
-        self._cam_fx = 322.0   # Brennweite X [px]
-        self._cam_fy = 322.0   # Brennweite Y [px]
-        self._cam_cx = 320.0   # Hauptpunkt X [px] – Bildmitte horizontal
-        self._cam_cy = 240.0   # Hauptpunkt Y [px] – Bildmitte vertikal
+        # K aus ROS camera_info Topic (D435i, 1280×720, color stream):
+        # [910.78,   0,   644.17;  0, 910.99, 367.87;  0, 0, 1]
+        self._cam_fx = 910.7815551757812    # Brennweite X [px]
+        self._cam_fy = 910.9876708984375    # Brennweite Y [px]
+        self._cam_cx = 644.165283203125     # Hauptpunkt X [px]
+        self._cam_cy = 367.8723449707031    # Hauptpunkt Y [px]
 
         # ── Parameter (rekonfigurierbare Tischgeometrie) ─────────────────────
         self._z_table = sr.Parameter("z_table", 0.170, sr.ParameterType.DOUBLE)
