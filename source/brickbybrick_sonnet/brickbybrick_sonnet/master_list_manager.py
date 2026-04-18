@@ -53,12 +53,13 @@ class MasterListManager(LifecycleComponent):
         self.add_parameter("_z_table", "Tischhöhe im Weltframe [m] – aktuell 170 mm, bei Umbau anpassen")
 
         # ── Inputs ────────────────────────────────────────────────────────────
-        # yolo_done_trigger: Event-Trigger – user_callback prüft steigende Flanke
+        # yolo_done_trigger: Polling im on_step_callback statt user_callback.
+        # Grund: user_callback feuert sofort beim Topic-Empfang – yolo_corners_list_in
+        # kann dann noch alt sein (ROS garantiert keine Reihenfolge zwischen Topics).
+        # In on_step_callback sind alle Inputs auf dem aktuellen Step-Stand.
         self._yolo_done_trigger = False
-        self.add_input(
-            "yolo_done_trigger", "_yolo_done_trigger", Bool,
-            user_callback=self._on_yolo_trigger,
-        )
+        self.add_input("yolo_done_trigger", "_yolo_done_trigger", Bool)
+        self._prev_yolo_done_trigger: bool = False
 
         # YOLO-Eckpunkte werden synchron mit yolo_done_trigger geliefert
         self._yolo_corners_list_in = []
@@ -110,6 +111,8 @@ class MasterListManager(LifecycleComponent):
         self._master_dropoff = []
         self._filtered_yolo = []
         self._mlm_done_trigger = False
+        self._reset_trigger_next_step = False
+        self._prev_yolo_done_trigger = False
         self.get_logger().info("MasterListManager: Konfiguriert – Arrays geleert.")
         return True
 
@@ -127,6 +130,13 @@ class MasterListManager(LifecycleComponent):
     # ─────────────────────────────────────────────────────────────────────────
 
     def on_step_callback(self):
+        # ── Steigende Flanke yolo_done_trigger erkennen ──────────────────────
+        # Polling statt user_callback – garantiert dass yolo_corners_list_in
+        # im selben Step-Snapshot bereits aktualisiert wurde.
+        if self._yolo_done_trigger and not self._prev_yolo_done_trigger:
+            self._on_yolo_trigger()
+        self._prev_yolo_done_trigger = self._yolo_done_trigger
+
         # Verzögerter Reset: erst im übernächsten Takt zurücksetzen,
         # damit AICA beim Publish noch True sieht.
         if self._reset_trigger_next_step:
@@ -140,10 +150,7 @@ class MasterListManager(LifecycleComponent):
     # ─────────────────────────────────────────────────────────────────────────
 
     def _on_yolo_trigger(self):
-        # Nur bei steigender Flanke (True) verarbeiten
-        if not self._yolo_done_trigger:
-            return
-
+        # Wird vom on_step_callback bei steigender Flanke aufgerufen.
         corners = self._yolo_corners_list_in
         if len(corners) == 0:
             # Kein Klotz erkannt – filtered_yolo leeren (physikalisch entfernt)

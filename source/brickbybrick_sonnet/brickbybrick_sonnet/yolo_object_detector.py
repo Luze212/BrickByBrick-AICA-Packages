@@ -92,6 +92,10 @@ class YoloObjectDetector(LifecycleComponent):
         self._yolo_done_trigger = False
         self.add_output("yolo_done_trigger", "_yolo_done_trigger", Bool)
 
+        # Trigger wird einen Step VERZÖGERT gesetzt, damit yolo_corners_list
+        # garantiert vor dem Trigger beim MLM ankommt (ROS hat keine Topic-
+        # übergreifende Empfangsreihenfolge → sonst Race im MLM-user_callback).
+        self._trigger_pending: bool = False
         self._reset_trigger_next_step: bool = False
 
         # ── Internes Modell-Handle (persistent, über Taktzyklen hinweg) ───────
@@ -138,6 +142,8 @@ class YoloObjectDetector(LifecycleComponent):
             return False
 
         self._yolo_done_trigger = False
+        self._trigger_pending = False
+        self._reset_trigger_next_step = False
         self._new_image_pending = False
         self._pending_image_array = None
         self._pending_ist_pose = None
@@ -160,6 +166,9 @@ class YoloObjectDetector(LifecycleComponent):
 
     def on_step_callback(self):
         # ── YOLO-Inferenz: nur wenn ein neues Bild vorliegt ──────────────────
+        # _run_yolo_inference setzt _trigger_pending = True, NICHT
+        # _yolo_done_trigger direkt. Der Trigger wird einen Step später
+        # gesetzt, damit corners garantiert vorher beim MLM ankommen.
         if self._new_image_pending:
             self._new_image_pending = False
             self._run_yolo_inference()
@@ -171,6 +180,10 @@ class YoloObjectDetector(LifecycleComponent):
             self._reset_trigger_next_step = False
         elif self._yolo_done_trigger:
             self._reset_trigger_next_step = True
+        elif self._trigger_pending:
+            # Vorheriger Step hat corners publiziert → jetzt Trigger feuern.
+            self._yolo_done_trigger = True
+            self._trigger_pending = False
 
     def _run_yolo_inference(self):
         """
@@ -226,8 +239,10 @@ class YoloObjectDetector(LifecycleComponent):
         if self._pending_cam_pose is not None:
             self._cam_ist_pose_out = self._pending_cam_pose
 
-        # ── Trigger setzen (on_step_callback setzt ihn nächsten Takt zurück) ──
-        self._yolo_done_trigger = True
+        # ── Trigger erst NÄCHSTEN Step setzen – siehe on_step_callback ───────
+        # Grund: corners müssen erst publiziert sein, bevor der Trigger den
+        # MLM-user_callback feuert (sonst Race: trigger vor corners).
+        self._trigger_pending = True
         self.get_logger().info(
             f"YoloObjectDetector: Inferenz abgeschlossen – "
             f"{len(corners_flat) // 8} Klotz/Klötze nach Rand-Filter erkannt."

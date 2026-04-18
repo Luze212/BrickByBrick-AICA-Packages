@@ -1707,15 +1707,20 @@ class DropoffLineExtractor(LifecycleComponent):
         self._cam_ist_pose = sr.CartesianPose("cam_ist_pose", "world")
         self.add_input("cam_ist_pose", "_cam_ist_pose", EncodedState)
 
-        # yolo_done_trigger: steigende Flanke startet Linienerkennung
+        # yolo_done_trigger: Polling im on_step_callback statt user_callback.
+        # Grund: user_callback feuert im Subscriber-Thread, _trigger_ppl kann
+        # dort noch alt sein (ROS hat keine Topic-übergreifende Reihenfolge).
+        # In on_step_callback sind alle Inputs auf dem aktuellen Step-Stand.
         self._yolo_done_trigger = False
-        self.add_input(
-            "yolo_done_trigger", "_yolo_done_trigger", Bool,
-            user_callback=self._on_yolo_trigger,
-        )
+        self.add_input("yolo_done_trigger", "_yolo_done_trigger", Bool)
+        self._prev_yolo_done_trigger: bool = False
 
         self._trigger_ppl = False
         self.add_input("trigger_ppl", "_trigger_ppl", Bool)
+
+        # Latch: sobald trigger_ppl einmal True war, bleibt DLE permanent
+        # inaktiv – immun gegen Flackern oder lang laufende Jobs.
+        self._ppl_started_latch: bool = False
 
         # ── Outputs ───────────────────────────────────────────────────────────
         self._line_ex_list = []
@@ -1730,6 +1735,8 @@ class DropoffLineExtractor(LifecycleComponent):
 
     def on_configure_callback(self) -> bool:
         self._line_ex_list = []
+        self._prev_yolo_done_trigger = False
+        self._ppl_started_latch = False
         return True
 
     def on_activate_callback(self) -> bool:
@@ -1740,19 +1747,28 @@ class DropoffLineExtractor(LifecycleComponent):
         return True
 
     def on_step_callback(self):
-        pass
+        # Latch setzen, sobald trigger_ppl einmal True war – auch wenn dieser
+        # Step keinen yolo_done_trigger sieht. Danach bleibt DLE inaktiv.
+        if self._trigger_ppl:
+            self._ppl_started_latch = True
+
+        # ── Steigende Flanke yolo_done_trigger erkennen ──────────────────────
+        # Polling statt user_callback – garantiert dass _trigger_ppl im selben
+        # Step-Snapshot bereits aktualisiert wurde.
+        if self._yolo_done_trigger and not self._prev_yolo_done_trigger:
+            self._on_yolo_trigger()
+        self._prev_yolo_done_trigger = self._yolo_done_trigger
 
     # ─────────────────────────────────────────────────────────────────────────
     # Event-Callback: yolo_done_trigger (steigende Flanke)
     # ─────────────────────────────────────────────────────────────────────────
 
     def _on_yolo_trigger(self):
-        # ── Bypass Phase 2 ────────────────────────────────────────────────────
-        if self._trigger_ppl:
-            return
-
-        # ── Nur steigende Flanke auswerten ────────────────────────────────────
-        if not self._yolo_done_trigger:
+        # ── Bypass Phase 2 (mit Latch) ────────────────────────────────────────
+        # Latch verhindert, dass ein einmal aktivierter PP-Modus durch
+        # spätere False-Pulse aufgehoben wird.
+        if self._trigger_ppl or self._ppl_started_latch:
+            self._ppl_started_latch = True
             return
 
         # ── Kamerapose prüfen ─────────────────────────────────────────────────
