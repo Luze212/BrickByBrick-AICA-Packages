@@ -184,6 +184,27 @@ def _q0_qz_from_yaw_rad(yaw):
     return float(np.cos(half)), float(np.sin(half))
 
 
+def _preferred_symmetric_yaw_rad(yaw_rad):
+    """
+    Nutzt die 180°-Symmetrie des Steins:
+    Zwischen yaw und yaw+pi wird die Variante mit kleinerem Winkelbetrag gewählt.
+    """
+    base = float(np.arctan2(np.sin(float(yaw_rad)), np.cos(float(yaw_rad))))
+    alt = float(np.arctan2(np.sin(base + np.pi), np.cos(base + np.pi)))
+
+    abs_base = abs(base)
+    abs_alt = abs(alt)
+    eps = 1e-12
+
+    if abs_alt + eps < abs_base:
+        return alt
+    if abs_base + eps < abs_alt:
+        return base
+
+    # Bei Gleichstand (z. B. ±90°) positiv bevorzugen (statt 270°-Äquivalent).
+    return float(abs(base))
+
+
 def mask_from_corners(shape_hw, corners_xy):
     h, w = shape_hw[:2]
     m = np.zeros((h, w), np.uint8)
@@ -1595,7 +1616,8 @@ def run_block_pipeline_world(
         center_world_xy = (center_cam_xy @ R_cam_to_world.T)[0] + camera_pos_world_mm[:2]
         corners_world_xy = (corners_cam_xy @ R_cam_to_world.T) + camera_pos_world_mm[:2]
 
-        yaw_world = float(np.arctan2(np.sin(b['theta'] + alpha), np.cos(b['theta'] + alpha)))
+        yaw_cam = _preferred_symmetric_yaw_rad(float(b['theta']))
+        yaw_world = _preferred_symmetric_yaw_rad(float(b['theta'] + alpha))
 
         corners_world_mm = np.column_stack([
             corners_world_xy[:, 0],
@@ -1606,8 +1628,8 @@ def run_block_pipeline_world(
         blocks_px.append(dict(
             id=i,
             center_px_und=[float(center_px[0]), float(center_px[1])],
-            yaw_rad=float(b['theta']),
-            yaw_deg=float(np.degrees(b['theta'])),
+            yaw_rad=yaw_cam,
+            yaw_deg=float(np.degrees(yaw_cam)),
             corners_px_und=corners_px.tolist(),
         ))
 
@@ -1688,17 +1710,18 @@ class DropoffLineExtractor(LifecycleComponent):
         self._block_z_world_mm = sr.Parameter("block_z_world_mm", 170.0 + STONE_HEIGHT_MM, sr.ParameterType.DOUBLE)
         self.add_parameter("_block_z_world_mm", "TCP-Z beim Ablegen in Weltkoordinaten (mm) – typisch: table_z + Steinhöhe")
 
-        self._l_mm = sr.Parameter("l_mm", 35.0, sr.ParameterType.DOUBLE)
+        self._l_mm = sr.Parameter("l_mm", 75.0, sr.ParameterType.DOUBLE)
         self.add_parameter("_l_mm", "Länge eines Bausteins (mm)")
 
-        self._w_mm = sr.Parameter("w_mm", 10.0, sr.ParameterType.DOUBLE)
+        self._w_mm = sr.Parameter("w_mm", 25.0, sr.ParameterType.DOUBLE)
         self.add_parameter("_w_mm", "Breite eines Bausteins (mm)")
 
-        self._step_mm = sr.Parameter("step_mm", 33.25, sr.ParameterType.DOUBLE)
+        self._step_mm = sr.Parameter("step_mm", 77.5, sr.ParameterType.DOUBLE)
         self.add_parameter("_step_mm", "Schrittweite zwischen Baustein-Mittelpunkten entlang der Linie (mm)")
 
         self._min_len_px = sr.Parameter("min_len_px", 30.0, sr.ParameterType.DOUBLE)
         self.add_parameter("_min_len_px", "Minimale Strich-Länge in Pixeln – kürzere Striche werden ignoriert")
+
 
         # ── Inputs ────────────────────────────────────────────────────────────
         self._image_in = RosImage()
