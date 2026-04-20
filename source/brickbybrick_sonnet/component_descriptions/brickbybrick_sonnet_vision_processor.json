@@ -1,0 +1,131 @@
+{
+  "name": "Vision Processor",
+  "description": {
+    "brief": "Fusionierter Vision-Block: Pose-Kamera + YOLO + DLE + MLM in einem Component.",
+    "details": "Experimentelle Alternative zu PoseTriggeredCamera + YoloObjectDetector + DropoffLineExtractor + MasterListManager. Führt die komplette Vision-Pipeline synchron in on_step_callback aus und vermeidet damit strukturell Race-Conditions zwischen asynchron gelieferten Topics. Ablauf: take_img-Flanke → SETTLING (settling_delay_s) → Snapshot (Bild + TCP-Pose) → YOLO-Inferenz → DLE (nur Phase 1) → MLM-Geometrie → Ausgabe von master_overview, master_dropoff, filtered_yolo. img_taken wird erst nach vollständigem Pipeline-Durchlauf gesetzt. vision_processor_done ist ein 1-Takt-Puls für downstream-Handshake. DLE wird nach erster trigger_ppl=True permanent per Latch deaktiviert. Ersetzt KEINE bestehenden Blöcke – läuft parallel als Testvariante."
+  },
+  "registration": "brickbybrick_sonnet::VisionProcessor",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Bild anfordern (Trigger)",
+      "description": "Steigende Flanke vom ExplorationNavigator/PickPlaceController. Startet Settling-Phase und anschließend die komplette Vision-Pipeline.",
+      "signal_name": "take_img",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Trajektorie erfolgreich",
+      "description": "Bestätigung vom JtcCommandGenerator, dass die Zielpose erreicht wurde. Optional – dient als Freigabe für die Snapshot-Aufnahme.",
+      "signal_name": "trajectory_success",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Ist-Pose (Roboter-TCP)",
+      "description": "Aktuelle TCP-Pose des Roboters im Weltframe. Wird zum Snapshot-Zeitpunkt eingefroren und intern in eine Kamerapose via festem Kamera-Offset umgerechnet.",
+      "signal_name": "ist_pose_in",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Bildstrom (Kamera)",
+      "description": "ROS sensor_msgs/Image vom RGB-Kamerastream. Wird beim Snapshot eingefroren und an die YOLO-Inferenz übergeben.",
+      "signal_name": "image_stream",
+      "signal_type": "ros_image"
+    },
+    {
+      "display_name": "PPL-Trigger (Phase-2-Start)",
+      "description": "Signal vom ExplorationNavigator. Sobald einmal True, wird der DLE-Teil der Pipeline per Latch permanent deaktiviert. YOLO+MLM laufen weiter (Closed-Loop-Picken).",
+      "signal_name": "trigger_ppl",
+      "signal_type": "bool"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Settling-Verzögerung",
+      "description": "Wartezeit nach take_img-Flanke bis zur Snapshot-Aufnahme [s]. Gibt dem Roboter Zeit zum Ausschwingen, bevor Bild und Pose eingefroren werden.",
+      "parameter_name": "settling_delay_s",
+      "parameter_type": "double",
+      "default_value": "0.3"
+    },
+    {
+      "display_name": "YOLO-Modellpfad",
+      "description": "Pfad zur trainierten YOLOv11-Seg Gewichtsdatei (.pt).",
+      "parameter_name": "model_path",
+      "parameter_type": "string",
+      "default_value": ""
+    },
+    {
+      "display_name": "Tischhöhe",
+      "description": "Höhe der Tischebene im Weltframe [m]. Wird für die Pinhole-Strahl-Tisch-Schnittberechnung und als DLE-Tisch-Z verwendet.",
+      "parameter_name": "z_table_m",
+      "parameter_type": "double",
+      "default_value": "0.170"
+    },
+    {
+      "display_name": "Block-Ablage-Z (TCP)",
+      "description": "TCP-Z-Wert beim Ablegen eines Klotzes [mm]. Typisch: Tischhöhe + Steinhöhe.",
+      "parameter_name": "block_z_world_mm",
+      "parameter_type": "double",
+      "default_value": "181.0"
+    },
+    {
+      "display_name": "Baustein-Länge",
+      "description": "Länge eines Bausteins [mm].",
+      "parameter_name": "l_mm",
+      "parameter_type": "double",
+      "default_value": "75.0"
+    },
+    {
+      "display_name": "Baustein-Breite",
+      "description": "Breite eines Bausteins [mm].",
+      "parameter_name": "w_mm",
+      "parameter_type": "double",
+      "default_value": "25.0"
+    },
+    {
+      "display_name": "DLE-Schrittweite",
+      "description": "Schrittweite zwischen Baustein-Mittelpunkten entlang der Ablagelinie [mm].",
+      "parameter_name": "step_mm",
+      "parameter_type": "double",
+      "default_value": "77.5"
+    },
+    {
+      "display_name": "DLE min. Linienlänge",
+      "description": "Minimale Linienlänge [px] – kürzere Liniensegmente werden verworfen.",
+      "parameter_name": "min_len_px",
+      "parameter_type": "double",
+      "default_value": "30.0"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Übersichts-Posen (Master Overview)",
+      "description": "TCP-Posen aller Kameraaufnahmen aus Phase 1. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird nur befüllt, solange trigger_ppl=False.",
+      "signal_name": "master_overview",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Ablage-Positionen (Master Dropoff)",
+      "description": "3D-TCP-Ablageposen. Stride 7: [X,Y,Z,Qw,Qx,Qy,Qz,...]. Wird vom intern laufenden DLE befüllt, sobald eine vollständigere Liste extrahiert wurde.",
+      "signal_name": "master_dropoff",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Gefilterte Klotz-Posen (Filtered YOLO)",
+      "description": "3D-Greifposen aller sichtbaren Klötze, die nicht auf Ablagepositionen liegen. Stride 9: [X,Y,Area,u_center,v_center,Qw,Qx,Qy,Qz,...]. Wird bei jeder Pipeline-Ausführung überschrieben.",
+      "signal_name": "filtered_yolo",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "VisionProcessor fertig (Trigger)",
+      "description": "1-Takt-Puls (True→False) nach vollständigem Pipeline-Durchlauf. Garantiert dem PickPlaceController, dass alle Ausgaben konsistent aktualisiert sind.",
+      "signal_name": "vision_processor_done",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Bild aufgenommen (Handshake)",
+      "description": "Wird nach Abschluss der kompletten Pipeline auf True gesetzt. Signalisiert dem ExplorationNavigator, dass die Aufnahme verarbeitet ist.",
+      "signal_name": "img_taken",
+      "signal_type": "bool"
+    }
+  ]
+}
