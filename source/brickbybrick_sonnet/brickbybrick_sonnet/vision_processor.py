@@ -131,12 +131,6 @@ class VisionProcessor(LifecycleComponent):
             "_min_len_px", "Minimale Linienlänge [px] – kürzere werden verworfen",
         )
 
-        self._emit_debug = sr.Parameter("emit_debug", False, sr.ParameterType.BOOL)
-        self.add_parameter(
-            "_emit_debug",
-            "Wenn True: debug_image mit YOLO-Overlay + Pose-/Timing-Text publizieren",
-        )
-
         # ── Inputs ────────────────────────────────────────────────────────────
         self._take_img = False
         self.add_input("take_img", "_take_img", Bool)
@@ -355,12 +349,11 @@ class VisionProcessor(LifecycleComponent):
             f"Σ {t_yolo_ms + t_dle_ms + t_mlm_ms:.0f} ms."
         )
 
-        # 5) Debug-Image optional rendern.
-        if self._emit_debug.get_value():
-            self._publish_debug_image(
-                image_array, msg, corners, cam_pos,
-                t_yolo_ms, t_dle_ms, t_mlm_ms, dle_skipped,
-            )
+        # 5) Debug-Image immer rendern (Beobachtbarkeits-Output).
+        self._publish_debug_image(
+            image_array, msg, corners, cam_pos,
+            t_yolo_ms, t_dle_ms, t_mlm_ms, dle_skipped,
+        )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Teilschritt: Kamerapose berechnen

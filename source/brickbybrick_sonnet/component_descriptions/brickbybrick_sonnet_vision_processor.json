@@ -95,13 +95,6 @@
       "parameter_name": "min_len_px",
       "parameter_type": "double",
       "default_value": "30.0"
-    },
-    {
-      "display_name": "Debug-Image emittieren",
-      "description": "Wenn True, wird pro Pipeline-Lauf ein debug_image mit YOLO-Overlay, Kamerapose- und Timing-Text gerendert. Im Produktivbetrieb auf False lassen (Zusatzlast).",
-      "parameter_name": "emit_debug",
-      "parameter_type": "bool",
-      "default_value": "false"
     }
   ],
   "outputs": [
@@ -137,7 +130,7 @@
     },
     {
       "display_name": "Debug-Image",
-      "description": "RGB-Bild mit YOLO-Boxen, Center-Markern und Text-Overlay (Klotz-/Dropoff-Counts, Kamerapose, Phase, Pipeline-Timings). Wird nur befüllt, wenn Parameter emit_debug=True.",
+      "description": "RGB-Bild mit YOLO-Boxen, Center-Markern und Text-Overlay (Klotz-/Dropoff-Counts, Kamerapose, Phase, Pipeline-Timings). Wird bei jedem Pipeline-Durchlauf aktualisiert.",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
