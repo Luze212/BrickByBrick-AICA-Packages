@@ -606,3 +606,86 @@ class VisionProcessor(LifecycleComponent):
             f"VisionProcessor: DLE – {len(flat) // 7} Ablageposen erkannt."
         )
         return flat
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Debug-Image: YOLO-Overlay + Pose-/Timing-Text als ROS-Image publizieren
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _publish_debug_image(
+        self, image_array, src_msg, corners, cam_pos,
+        t_yolo_ms, t_dle_ms, t_mlm_ms, dle_skipped,
+    ):
+        try:
+            # Eingangsbild ist rgb8 – für sauberes Overlay auf BGR-Kopie zeichnen
+            # und am Ende wieder als rgb8 publizieren (konsistent zum Input).
+            overlay = image_array[:, :, ::-1].copy()  # RGB → BGR
+            h, w = overlay.shape[:2]
+
+            # YOLO-Boxen + Center zeichnen (Stride 8).
+            n_bricks = len(corners) // 8
+            for i in range(0, len(corners), 8):
+                if i + 8 > len(corners):
+                    break
+                pts = np.array([
+                    [corners[i],     corners[i + 1]],
+                    [corners[i + 2], corners[i + 3]],
+                    [corners[i + 4], corners[i + 5]],
+                    [corners[i + 6], corners[i + 7]],
+                ], dtype=np.int32)
+                cv2.polylines(overlay, [pts], True, (0, 255, 0), 2)
+                u_c = int((corners[i]     + corners[i + 4]) / 2.0)
+                v_c = int((corners[i + 1] + corners[i + 5]) / 2.0)
+                cv2.circle(overlay, (u_c, v_c), 4, (0, 0, 255), -1)
+                cv2.putText(
+                    overlay, f"({u_c},{v_c})", (u_c + 6, v_c - 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1, cv2.LINE_AA,
+                )
+
+            # Ablage-Filter-Punkte aus master_dropoff (als gelbe Ringe).
+            # Für die Bildanzeige müssten wir sie zurückprojizieren – sparen wir
+            # uns hier und zeigen stattdessen Textzähler.
+            n_dropoff = len(self._master_dropoff) // 7
+
+            # Text-Overlay (mehrzeilig, halbtransparenter Hintergrund).
+            lines = [
+                f"YOLO: {n_bricks} bricks  |  filtered: {len(self._filtered_yolo) // 9}",
+                f"master_overview: {len(self._master_overview) // 7}  "
+                f"master_dropoff: {n_dropoff}",
+                (
+                    f"cam_pos: ({cam_pos[0]:+.3f}, {cam_pos[1]:+.3f}, {cam_pos[2]:+.3f}) m"
+                    if cam_pos is not None else "cam_pos: <unknown>"
+                ),
+                f"t: YOLO {t_yolo_ms:.0f}ms  DLE "
+                f"{'skip' if dle_skipped else f'{t_dle_ms:.0f}ms'}  "
+                f"MLM {t_mlm_ms:.0f}ms",
+                f"phase: {'PP (latch)' if self._ppl_started_latch else 'explore'}",
+            ]
+            pad = 6
+            line_h = 18
+            box_h = line_h * len(lines) + 2 * pad
+            box_w = 430
+            sub = overlay[0:box_h, 0:box_w]
+            tint = np.zeros_like(sub)
+            overlay[0:box_h, 0:box_w] = cv2.addWeighted(sub, 0.45, tint, 0.55, 0)
+            for idx, txt in enumerate(lines):
+                cv2.putText(
+                    overlay, txt, (pad, pad + (idx + 1) * line_h - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA,
+                )
+
+            # Zurück nach RGB, damit Input und Output gleiches Encoding haben.
+            out_rgb = overlay[:, :, ::-1]
+
+            dbg = RosImage()
+            dbg.header = src_msg.header
+            dbg.height = h
+            dbg.width = w
+            dbg.encoding = src_msg.encoding if src_msg.encoding else "rgb8"
+            dbg.is_bigendian = src_msg.is_bigendian
+            dbg.step = w * out_rgb.shape[2]
+            dbg.data = out_rgb.tobytes()
+            self._debug_image = dbg
+        except Exception as exc:
+            self.get_logger().warn(
+                f"VisionProcessor: Debug-Image-Rendering fehlgeschlagen: {exc}"
+            )
