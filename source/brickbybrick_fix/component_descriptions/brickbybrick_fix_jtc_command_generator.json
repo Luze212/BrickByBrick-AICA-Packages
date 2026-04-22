@@ -4,7 +4,7 @@
     "brief": "Berechnet die benötigte Fahrtdauer und sendet einen JTC-Befehl via set_trajectory Service.",
     "details": "Empfängt die aktuelle Ist-Pose und eine neue Ziel-Pose. Bei jeder neuen Ziel-Pose (Änderung > 1mm) wird die euklidische Distanz berechnet und durch v_max geteilt (Minimum: 0.5s). Der Payload-String im Format {frames: [frame_name], durations: [time]} wird einmalig asynchron über den ROS 2 StringTrigger Service an den JTC gesendet."
   },
-  "registration": "brickbybrick_sonnet::JtcCommandGenerator",
+  "registration": "brickbybrick_fix::JtcCommandGenerator",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {

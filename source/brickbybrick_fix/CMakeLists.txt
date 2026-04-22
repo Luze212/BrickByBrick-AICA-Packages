@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(brickbybrick_sonnet)
+project(brickbybrick_fix)
 
 # default to C99
 if(NOT CMAKE_C_STANDARD)

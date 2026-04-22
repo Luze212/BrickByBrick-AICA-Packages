@@ -25,19 +25,19 @@ image = "v2.0.5-jazzy"
 "@aica/foss/control-libraries" = "v9.2.0"
 "@aica/foss/modulo" = "v5.2.2"
 
-[build.packages.brickbybrick-sonnet]
-source = "./source/brickbybrick_sonnet"
+[build.packages.brickbybrick-fix]
+source = "./source/brickbybrick_fix"
 
 ## System-Abhängigkeiten für ultralytics (YOLO) – OpenCV benötigt diese im Container
-[build.packages.brickbybrick-sonnet.dependencies.apt]
+[build.packages.brickbybrick-fix.dependencies.apt]
 libgl1 = "*"
 "libglib2.0-0"= "*"
 
 ## by default, we will install any pip packages in `${package_source}/requirements.txt`
 ## but you can customize the name of the requirements file, e.g.
-# [build.packages.brickbybrick-sonnet.dependencies.pip]
+# [build.packages.brickbybrick-fix.dependencies.pip]
 # file = "custom_requirements.txt"
 
 ## otherwise you can specify the pip packages directly
-# [build.packages.brickbybrick-sonnet.dependencies.pip.packages]
+# [build.packages.brickbybrick-fix.dependencies.pip.packages]
 # numpy = "1.0.0"

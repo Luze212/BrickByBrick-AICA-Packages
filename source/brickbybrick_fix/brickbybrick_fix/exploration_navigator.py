@@ -18,7 +18,7 @@ import state_representation as sr
 
 try:
     from ament_index_python.packages import get_package_share_directory as _get_share
-    _SHARE = _get_share("brickbybrick_sonnet")
+    _SHARE = _get_share("brickbybrick_fix")
 except Exception:
     _SHARE = "."
 

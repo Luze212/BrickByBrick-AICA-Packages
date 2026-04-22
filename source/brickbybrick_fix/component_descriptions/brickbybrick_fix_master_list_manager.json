@@ -4,7 +4,7 @@
     "brief": "Geometrische Berechnungen (Pixel→3D), Twist-Minimierung und Klotz-Filterung.",
     "details": "Event-getriebener DataHandler. Empfängt YOLO-Eckpunkte (via yolo_done_trigger) und berechnet für jeden Klotz: Diagonalschnittpunkt (u/v-Center), Polygonfläche (Shoelace), Kantenwinkel, optimalen Greif-Yaw (Twist-Minimierung) und 3D-Weltkoordinaten (Platzhalter: Pinhole-Projektion + Strahl-Tisch-Schnitt). Das Ergebnis wird als filtered_yolo (Stride 9) ausgegeben – gefiltert um Klötze auf Ablagepositionen. filtered_yolo wird bei JEDER neuen YOLO-Inferenz überschrieben (Closed-Loop-Mechanismus). master_overview wird nur in Phase 1 (trigger_ppl=False) befüllt. master_dropoff wird übernommen wenn die neue line_ex_list länger ist."
   },
-  "registration": "brickbybrick_sonnet::MasterListManager",
+  "registration": "brickbybrick_fix::MasterListManager",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {

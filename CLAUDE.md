@@ -94,8 +94,8 @@ Every Python component requires a JSON file in `component_descriptions/`. Filena
 
 ## File Structure Rules (Ament Build System — Strict)
 
-- `CMakeLists.txt`, `package.xml`, `setup.cfg`, `requirements.txt` **must** be at the package root (`source/brickbybrick_sonnet/`), never in subdirectories
-- Python components live in `source/brickbybrick_sonnet/brickbybrick_sonnet/` (subfolder named after the package)
+- `CMakeLists.txt`, `package.xml`, `setup.cfg`, `requirements.txt` **must** be at the package root (`source/brickbybrick_fix/`), never in subdirectories
+- Python components live in `source/brickbybrick_fix/brickbybrick_fix/` (subfolder named after the package)
 
 ## CMakeLists.txt Anti-Patterns
 
@@ -112,8 +112,8 @@ install(DIRECTORY ./component_descriptions DESTINATION .)
 
 ## Adding Dependencies
 
-- Python packages: add to `source/brickbybrick_sonnet/requirements.txt` and reference in `aica-package.toml` under `[build.packages.brickbybrick-sonnet.dependencies.pip]`
-- C++/system libraries: add to `aica-package.toml` under `[build.packages.brickbybrick-sonnet.dependencies.apt]`
+- Python packages: add to `source/brickbybrick_fix/requirements.txt` and reference in `aica-package.toml` under `[build.packages.brickbybrick-fix.dependencies.pip]`
+- C++/system libraries: add to `aica-package.toml` under `[build.packages.brickbybrick-fix.dependencies.apt]`
 
 ## Development Guidelines
 

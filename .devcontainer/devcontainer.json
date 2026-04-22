@@ -1,5 +1,5 @@
 {
-  "name": "brickbybrick-sonnet",
+  "name": "brickbybrick-fix",
   "containerUser": "ros2",
   "initializeCommand": [
     "docker",
@@ -7,12 +7,12 @@
     "--file=aica-package.toml",
     "--target=development",
     "--build-arg=config.signing.enabled=false",
-    "--tag=aica-technology/brickbybrick-sonnet:development",
+    "--tag=aica-technology/brickbybrick-fix:development",
     "."
   ],
-  "image": "aica-technology/brickbybrick-sonnet:development",
-  "postStartCommand": "rm -r /home/ros2/ws/src/brickbybrick_sonnet && ln -s ${containerWorkspaceFolder}/source/brickbybrick_sonnet /home/ros2/ws/src/brickbybrick_sonnet",
-  "postCreateCommand": "/usr/local/bin/generate_compile_commands -p brickbybrick_sonnet -t 60 -o ${containerWorkspaceFolder} --cmake-args BUILD_TESTING=ON",
+  "image": "aica-technology/brickbybrick-fix:development",
+  "postStartCommand": "rm -r /home/ros2/ws/src/brickbybrick_fix && ln -s ${containerWorkspaceFolder}/source/brickbybrick_fix /home/ros2/ws/src/brickbybrick_fix",
+  "postCreateCommand": "/usr/local/bin/generate_compile_commands -p brickbybrick_fix -t 60 -o ${containerWorkspaceFolder} --cmake-args BUILD_TESTING=ON",
   "customizations": {
     "vscode": {
       "extensions": [

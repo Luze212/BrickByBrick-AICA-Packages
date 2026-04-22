@@ -4,7 +4,7 @@
     "brief": "Schießt einen synchron eingefrorenen Snapshot nach einem konfigurierbaren Settling-Delay.",
     "details": "Wartet auf take_img=True UND trajectory_success=True, pausiert dann 0,3 s (Vibrations-Settling), und friert dann Bild und Roboter-Ist-Pose synchron als Deep-Copy ein. Die Kamerapose wird aus der TCP-Pose über eine fest hinterlegte TCP→Kamera-Transformationsmatrix berechnet (Platzhalter: _CAM_OFFSET_XYZ / _CAM_OFFSET_QUAT in pose_triggered_camera.py). Bestätigt den Snapshot per img_taken=True. Resettet img_taken automatisch, sobald trajectory_success wieder auf False fällt."
   },
-  "registration": "brickbybrick_sonnet::PoseTriggeredCamera",
+  "registration": "brickbybrick_fix::PoseTriggeredCamera",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {

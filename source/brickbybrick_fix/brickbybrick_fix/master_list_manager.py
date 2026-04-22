@@ -25,7 +25,7 @@ from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
 from std_msgs.msg import Bool, Float64MultiArray
 
-from brickbybrick_sonnet.geometry_utils import (
+from brickbybrick_fix.geometry_utils import (
     quaternion_from_euler,
     yaw_from_quaternion,
     minimize_twist,

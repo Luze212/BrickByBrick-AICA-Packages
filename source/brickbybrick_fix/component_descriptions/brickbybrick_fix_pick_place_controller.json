@@ -4,7 +4,7 @@
     "brief": "State-Machine für den vollautomatischen Pick-&-Place-Ablauf (Phase 2).",
     "details": "Verharrt im Standby solange trigger_ppl=False (Phase 1). Beim ersten trigger_ppl=True werden master_overview und master_dropoff einmalig in lokale, veränderbare Listen kopiert. filtered_yolo ist ein Live-Input – er wird niemals lokal kopiert. Das ermöglicht den physikalischen Closed-Loop: jeder gegriffene Klotz fehlt im nächsten Kamerabild und damit automatisch in filtered_yolo. WAIT_IMG_1 und WAIT_IMG_2 synchronisieren auf yolo_done_trigger (nicht img_taken), damit filtered_yolo garantiert frisch ist. Zustände: INIT→CHECK_LISTS→MOVE_OVERVIEW→WAIT_IMG_1→MOVE_PICK_HOVER→WAIT_IMG_2→EXECUTE_PICK→PREPARE_PLACE→EXECUTE_PLACE→CHECK_LISTS→FINISHED (Terminal). EXECUTE_PICK und EXECUTE_PLACE verwenden Sub-Zustände mit nicht-blockierenden Timern für Vakuum-Delays."
   },
-  "registration": "brickbybrick_sonnet::PickPlaceController",
+  "registration": "brickbybrick_fix::PickPlaceController",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {

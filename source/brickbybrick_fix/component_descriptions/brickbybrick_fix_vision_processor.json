@@ -4,7 +4,7 @@
     "brief": "Fusionierter Vision-Block: Pose-Kamera + YOLO + DLE + MLM in einem Component.",
     "details": "Experimentelle Alternative zu PoseTriggeredCamera + YoloObjectDetector + DropoffLineExtractor + MasterListManager. Führt die komplette Vision-Pipeline synchron in on_step_callback aus und vermeidet damit strukturell Race-Conditions zwischen asynchron gelieferten Topics. Ablauf: take_img-Flanke → SETTLING (settling_delay_s) → Snapshot (Bild + TCP-Pose) → YOLO-Inferenz → DLE (nur Phase 1) → MLM-Geometrie → Ausgabe von master_overview, master_dropoff, filtered_yolo. img_taken wird erst nach vollständigem Pipeline-Durchlauf gesetzt. vision_processor_done ist ein 1-Takt-Puls für downstream-Handshake. DLE wird nach erster trigger_ppl=True permanent per Latch deaktiviert. Ersetzt KEINE bestehenden Blöcke – läuft parallel als Testvariante."
   },
-  "registration": "brickbybrick_sonnet::VisionProcessor",
+  "registration": "brickbybrick_fix::VisionProcessor",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {

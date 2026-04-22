@@ -4,7 +4,7 @@
     "brief": "Fährt Explorationsposen ab und leitet im Gateway-Modus PPL-Kommandos weiter.",
     "details": "Phase 1 (EXPLORATION): Liest Posen aus ExplCords.yaml und fährt sie der Reihe nach ab. Bei Zielerreichung (< 2 mm) wird ein Kamera-Handshake durchgeführt (take_img_out → img_taken). Nach Abschluss aller Posen wird trigger_ppl gesetzt. Phase 2 (GATEWAY): Leitet target_pose_in und take_img_in des PickPlaceControllers 1:1 weiter und berechnet weiterhin trajectory_success."
   },
-  "registration": "brickbybrick_sonnet::ExplorationNavigator",
+  "registration": "brickbybrick_fix::ExplorationNavigator",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {

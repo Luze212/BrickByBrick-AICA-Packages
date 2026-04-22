@@ -44,7 +44,7 @@ from modulo_components.lifecycle_component import LifecycleComponent
 from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import Bool, Float64MultiArray
 
-from brickbybrick_sonnet.geometry_utils import (
+from brickbybrick_fix.geometry_utils import (
     quaternion_from_euler,
     yaw_from_quaternion,
     minimize_twist,
@@ -54,11 +54,11 @@ from brickbybrick_sonnet.geometry_utils import (
 )
 
 # DLE-Algorithmus-Funktionen inkl. Modul-Globals (bgr0, L_MM, ...) wiederverwenden.
-from brickbybrick_sonnet import dropoff_line_extractor as _dle_algo
+from brickbybrick_fix import dropoff_line_extractor as _dle_algo
 
 try:
     from ament_index_python.packages import get_package_share_directory as _get_share
-    _SHARE = _get_share("brickbybrick_sonnet")
+    _SHARE = _get_share("brickbybrick_fix")
 except Exception:
     _SHARE = "."
 

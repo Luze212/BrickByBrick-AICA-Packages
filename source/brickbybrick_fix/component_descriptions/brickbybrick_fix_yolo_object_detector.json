@@ -4,7 +4,7 @@
     "brief": "Erkennt Klötze im eingefrorenen Kamerabild und gibt 2D-Eckpunkte als flaches Array aus.",
     "details": "Event-getriebener Block. Lädt das YOLOv11-OBB Modell einmalig beim Konfigurieren. Reagiert per user_callback auf jedes neue Bild von PoseTriggeredCamera. Filtert Erkennungen am Bildrand (< 5 px), extrahiert die 4 OBB-Eckpunkte und gibt sie als flaches double_array aus (Stride 8: [u1,v1,u2,v2,u3,v3,u4,v4,...]). Leitet Roboter- und Kamerapose synchron weiter. Setzt yolo_done_trigger für genau einen Taktzyklus auf True."
   },
-  "registration": "brickbybrick_sonnet::YoloObjectDetector",
+  "registration": "brickbybrick_fix::YoloObjectDetector",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
