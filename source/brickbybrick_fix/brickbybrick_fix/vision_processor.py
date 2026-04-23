@@ -606,7 +606,7 @@ class VisionProcessor(LifecycleComponent):
             qy = float(np.cos(yaw / 2.0))
             qz = 0.0
             qw = 0.0
-            flat.extend([x_m, y_m, z_m, qx, qy, qz, qw])
+            flat.extend([x_m, y_m, z_m, qw, qx, qy, qz])
 
         self.get_logger().info(
             f"VisionProcessor: DLE – {len(flat) // 7} Ablageposen erkannt."
