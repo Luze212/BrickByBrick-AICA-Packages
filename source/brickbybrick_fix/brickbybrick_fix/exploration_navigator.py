@@ -22,7 +22,8 @@ try:
 except Exception:
     _SHARE = "."
 
-_DEFAULT_EXPL_PATH = os.path.join(_SHARE, "data", "exploration", "ExplCords.yaml")
+# JSON default_value enthält nur den Share-relativen Pfad ("data/exploration/ExplCords.yaml").
+# on_configure_callback kombiniert _SHARE + Parameterwert zum absoluten Laufzeit-Pfad.
 from clproto import MessageType
 from modulo_core.encoded_state import EncodedState
 from modulo_components.lifecycle_component import LifecycleComponent
@@ -37,7 +38,7 @@ class ExplorationNavigator(LifecycleComponent):
         # ── Parameter ─────────────────────────────────────────────────────────
         self._expl_coords_path = sr.Parameter(
             "expl_coords_path",
-            _DEFAULT_EXPL_PATH,
+            "data/exploration/ExplCords.yaml",  # relativ zum Share-Dir – AICA injiziert JSON default
             sr.ParameterType.STRING,
         )
         self.add_parameter(
@@ -88,7 +89,15 @@ class ExplorationNavigator(LifecycleComponent):
         return True
 
     def on_configure_callback(self) -> bool:
-        path = self._expl_coords_path.get_value()
+        path_val = self._expl_coords_path.get_value()
+        # Absoluten Laufzeit-Pfad bestimmen – identisches Muster wie model_path in YOD/VP.
+        if os.path.isabs(path_val):
+            path = path_val
+        else:
+            path = os.path.join(_SHARE, path_val)
+        self.get_logger().info(
+            f"ExplorationNavigator: Lade Posen von '{path}' (Parameter: '{path_val}')."
+        )
         try:
             with open(path, "r") as f:
                 data = yaml.safe_load(f)

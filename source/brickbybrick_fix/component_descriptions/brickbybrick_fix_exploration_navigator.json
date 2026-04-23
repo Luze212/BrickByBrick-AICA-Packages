@@ -61,10 +61,10 @@
   "parameters": [
     {
       "display_name": "Explorationsposen-Pfad",
-      "description": "Pfad zur YAML-Datei mit den Explorationsposen (ExplCords.yaml). Kann zur Laufzeit neu konfiguriert werden (erfordert Re-Konfiguration des Lifecycle).",
+      "description": "Pfad relativ zum installierten Share-Verzeichnis (z. B. 'data/exploration/ExplCords.yaml'). Alternativ absoluter Pfad. Python löst ihn zur Laufzeit gegen das ament Share-Dir auf.",
       "parameter_name": "expl_coords_path",
       "parameter_type": "string",
-      "default_value": "source/sonnet_small/exploration/ExplCords.yaml"
+      "default_value": "data/exploration/ExplCords.yaml"
     }
   ]
 }
