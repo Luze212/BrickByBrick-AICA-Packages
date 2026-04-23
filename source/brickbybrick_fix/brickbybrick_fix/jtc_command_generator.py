@@ -95,9 +95,14 @@ class JtcCommandGenerator(LifecycleComponent):
             self.get_logger().error("JTC Service Client nicht initialisiert (on_configure aufgerufen?).")
             return
 
-        # Nicht-blockierende Verfügbarkeitsprüfung
+        # Nicht-blockierende Verfügbarkeitsprüfung.
+        # Wenn der Service noch nicht bereit ist (z. B. Hardware startet noch),
+        # Befehl zurückstellen statt verwerfen – wird im nächsten Step erneut versucht.
         if not self._jtc_client.service_is_ready():
-            self.get_logger().warn("JTC Service nicht erreichbar – Befehl wird verworfen.")
+            self.get_logger().warn(
+                "JTC Service nicht erreichbar – Befehl wird zurückgestellt und im nächsten Step erneut versucht."
+            )
+            self._pending_command = command_string
             return
 
         req = StringTrigger.Request()
