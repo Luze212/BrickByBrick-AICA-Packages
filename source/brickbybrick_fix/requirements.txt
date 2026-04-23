@@ -4,3 +4,4 @@ pyyaml
 ultralytics
 opencv-python
 matplotlib
+onnxruntime
