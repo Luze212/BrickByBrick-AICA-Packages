@@ -33,7 +33,8 @@ try:
 except Exception:
     _SHARE = "."
 
-_DEFAULT_MODEL_PATH = os.path.join(_SHARE, "data", "model", "best.pt")
+# JSON default_value enthält nur den Share-relativen Pfad ("data/model/best.pt").
+# on_configure_callback kombiniert _SHARE + Parameterwert zur absoluten Laufzeit-Pfad.
 import cv2
 import state_representation as sr
 from clproto import MessageType
@@ -51,7 +52,7 @@ class YoloObjectDetector(LifecycleComponent):
         # ── Parameter ─────────────────────────────────────────────────────────
         self._model_path = sr.Parameter(
             "model_path",
-            _DEFAULT_MODEL_PATH,
+            "data/model/best.pt",   # relativ zum Share-Dir – AICA injiziert JSON default
             sr.ParameterType.STRING,
         )
         self.add_parameter(
@@ -120,10 +121,20 @@ class YoloObjectDetector(LifecycleComponent):
 
     def on_configure_callback(self) -> bool:
         """
-        Lädt das YOLOv11-OBB Modell einmalig in den RAM/GPU.
+        Lädt das YOLOv11-Seg Modell einmalig in den RAM/GPU.
         Dies ist ein zeitintensiver Vorgang – darf NICHT im on_step_callback passieren.
         """
-        path = self._model_path.get_value()
+        model_val = self._model_path.get_value()
+        # Absoluten Laufzeit-Pfad bestimmen:
+        # Ist der Wert bereits absolut (z. B. manuell in AICA gesetzt), direkt verwenden.
+        # Andernfalls relativ zum installierten Share-Verzeichnis auflösen.
+        if os.path.isabs(model_val):
+            path = model_val
+        else:
+            path = os.path.join(_SHARE, model_val)
+        self.get_logger().info(
+            f"YoloObjectDetector: Lade Modell von '{path}' (Parameter: '{model_val}')."
+        )
         try:
             from ultralytics import YOLO
             self._model = YOLO(path)

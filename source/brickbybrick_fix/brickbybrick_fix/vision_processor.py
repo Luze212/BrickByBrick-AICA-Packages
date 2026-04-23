@@ -62,7 +62,8 @@ try:
 except Exception:
     _SHARE = "."
 
-_DEFAULT_MODEL_PATH = os.path.join(_SHARE, "data", "model", "best.pt")
+# JSON default_value enthält nur den Share-relativen Pfad ("data/model/best.pt").
+# on_configure_callback kombiniert _SHARE + Parameterwert zur absoluten Laufzeit-Pfad.
 
 # ── Kamera-Intrinsik (RealSense D435i, 1280×720 color) ─────────────────────
 # Muss synchron zu MasterListManager gehalten werden.
@@ -94,7 +95,9 @@ class VisionProcessor(LifecycleComponent):
         )
 
         self._model_path = sr.Parameter(
-            "model_path", _DEFAULT_MODEL_PATH, sr.ParameterType.STRING,
+            "model_path",
+            "data/model/best.pt",   # relativ zum Share-Dir – AICA injiziert JSON default
+            sr.ParameterType.STRING,
         )
         self.add_parameter(
             "_model_path",
@@ -187,7 +190,17 @@ class VisionProcessor(LifecycleComponent):
         return True
 
     def on_configure_callback(self) -> bool:
-        path = self._model_path.get_value()
+        model_val = self._model_path.get_value()
+        # Absoluten Laufzeit-Pfad bestimmen:
+        # Ist der Wert bereits absolut (z. B. manuell in AICA gesetzt), direkt verwenden.
+        # Andernfalls relativ zum installierten Share-Verzeichnis auflösen.
+        if os.path.isabs(model_val):
+            path = model_val
+        else:
+            path = os.path.join(_SHARE, model_val)
+        self.get_logger().info(
+            f"VisionProcessor: Lade Modell von '{path}' (Parameter: '{model_val}')."
+        )
         try:
             from ultralytics import YOLO
             self._model = YOLO(path)

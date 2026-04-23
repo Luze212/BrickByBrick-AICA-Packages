@@ -56,10 +56,10 @@
   "parameters": [
     {
       "display_name": "Modellpfad",
-      "description": "Pfad zur trainierten YOLOv11-OBB Gewichtsdatei (.pt). Kann zur Laufzeit geändert werden (erfordert Re-Konfiguration).",
+      "description": "Pfad relativ zum installierten Share-Verzeichnis (z. B. 'data/model/best.pt'). Alternativ absoluter Pfad. Python löst ihn zur Laufzeit gegen das ament Share-Dir auf.",
       "parameter_name": "model_path",
       "parameter_type": "string",
-      "default_value": "source/sonnet_small/model/best.pt"
+      "default_value": "data/model/best.pt"
     }
   ]
 }

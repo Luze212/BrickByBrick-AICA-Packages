@@ -49,10 +49,10 @@
     },
     {
       "display_name": "YOLO-Modellpfad",
-      "description": "Pfad zur trainierten YOLOv11-Seg Gewichtsdatei (.pt).",
+      "description": "Pfad relativ zum installierten Share-Verzeichnis (z. B. 'data/model/best.pt'). Alternativ absoluter Pfad. Python löst ihn zur Laufzeit gegen das ament Share-Dir auf.",
       "parameter_name": "model_path",
       "parameter_type": "string",
-      "default_value": ""
+      "default_value": "data/model/best.pt"
     },
     {
       "display_name": "Tischhöhe",
