@@ -54,10 +54,10 @@ class JtcCommandGenerator(LifecycleComponent):
         return True
 
     def on_step_callback(self):
-        # 1. Ausstehenden Befehl aus dem Vorherigen Zyklus senden (TF ist jetzt sicher publiziert)
+        # 1. Ausstehenden Befehl senden – _pending_command wird nur in
+        #    _send_jtc_service_request gelöscht, damit ein Retry möglich bleibt.
         if self._pending_command is not None:
             self._send_jtc_service_request(self._pending_command)
-            self._pending_command = None
 
         # 2. Schutzabfrage: Warten bis echte Roboterdaten da sind
         if self._ist_pose.is_empty() or self._target_pose.is_empty():
@@ -102,9 +102,11 @@ class JtcCommandGenerator(LifecycleComponent):
             self.get_logger().warn(
                 "JTC Service nicht erreichbar – Befehl wird zurückgestellt und im nächsten Step erneut versucht."
             )
-            self._pending_command = command_string
+            # _pending_command bleibt gesetzt → automatischer Retry im nächsten Step.
             return
 
+        # Service bereit → Befehl abschicken und Slot freigeben.
+        self._pending_command = None
         req = StringTrigger.Request()
         req.payload = command_string
 
