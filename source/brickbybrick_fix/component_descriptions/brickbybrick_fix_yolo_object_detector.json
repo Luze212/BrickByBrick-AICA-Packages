@@ -59,7 +59,7 @@
       "description": "Pfad relativ zum installierten Share-Verzeichnis (z. B. 'data/model/best.pt'). Alternativ absoluter Pfad. Python löst ihn zur Laufzeit gegen das ament Share-Dir auf.",
       "parameter_name": "model_path",
       "parameter_type": "string",
-      "default_value": "data/model/best.pt"
+      "default_value": "data/model/best.onnx"
     }
   ]
 }
