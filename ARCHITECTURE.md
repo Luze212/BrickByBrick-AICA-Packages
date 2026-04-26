@@ -431,3 +431,98 @@ numpy = "1.0.0"
 - **Imports**: Alle neuen Imports müssen in den jeweiligen Paket-Anforderungen gepflegt werden
 - **YOLOv11 & Linienerkennung**: Als optionale/externe Module behandeln — Code so strukturieren, dass diese nachträglich eingebracht werden können
 - **Nicht selbstständig weiterarbeiten** ohne Nutzeranweisung — jeder Schritt wird explizit vom Nutzer vorgegeben
+
+---
+
+## 7. AICA-Build & Test
+
+AICA verwendet ein **eigenes Docker-Frontend** statt eines klassischen `Dockerfile`. Die gesamte Build-Konfiguration steht in `aica-package.toml`.
+
+### Standard-Befehle
+
+```bash
+# Paket bauen
+docker build -f aica-package.toml .
+
+# Nur Tests ausführen (eigene Build-Stage)
+docker build -f aica-package.toml --target test .
+```
+
+Da `docker build` genutzt wird, sind alle Standard-Docker-Argumente erlaubt (`-t <image_name>`, `--platform <platform>`, …).
+
+### Build-Konfiguration über CLI überschreiben
+
+Werte aus `aica-package.toml` lassen sich pro Build über die CLI überschreiben:
+
+```bash
+docker build -f aica-package.toml \
+  --build-arg config.build.cmake_args.SOME_FLAG=Release .
+```
+
+Schema: `--build-arg config.<key>=<value>` (Punkt-Notation entspricht der TOML-Verschachtelung).
+
+### Tests
+
+Tests werden mit `pytest` ausgeführt und nutzen ROS-Context-Fixtures (typisch unter `test/python_tests/conftest.py`).
+
+---
+
+## 8. AICA Package Template / Collections / DevContainer
+
+### Template-Repository
+
+Das Repo basiert auf dem **AICA Package Template** (https://github.com/aica-technology/component-template). Das Template wird typischerweise per "Use this template" auf GitHub oder durch Klonen instanziiert.
+
+### Initialisierungs-Wizard
+
+Beim ersten Klon ist `source/` leer. Der Wizard wird gestartet via:
+
+```bash
+./initialize_templates.sh
+```
+
+Der interaktive Wizard erzeugt Paketordner unter `source/`, befüllt `aica-package.toml` und erlaubt Auswahl der Komponenten-Templates. Re-Run ist möglich, **löscht aber alle vom Wizard angelegten Dateien**.
+
+### Single Package vs. Collection
+
+- **Single Package:** Genau ein ROS-2-Paket unter `source/<paketname>/`.
+- **Collection:** Mehrere Pakete unter `source/`, jeweils registriert in `aica-package.toml` unter `[build.packages.<paketname>]`. Beim Wizard wird optional ein Collection-Name abgefragt.
+
+Zusätzliche Pakete einer Collection lassen sich nachträglich hinzufügen, indem ein neuer Ordner in `source/` angelegt und in `aica-package.toml` unter `[build.packages.name_of_new_package]` referenziert wird.
+
+### DevContainer
+
+Das Template enthält eine `.devcontainer/devcontainer.json` mit AICA-Base-Images. Empfohlen: VS Code + `Dev Containers`-Extension → "Reopen in Container". Andere IDEs (z. B. JetBrains) können analog konfiguriert werden.
+
+> Bei Änderungen an `aica-package.toml` (Paketname, Dependencies) muss der DevContainer rebuildet werden.
+> Bei Collections fragt der Wizard, welches Paket der DevContainer nutzen soll – manuell änderbar in `devcontainer.json`.
+
+---
+
+## 9. Ergänzende AICA-Regeln (aus CLAUDE.md / CONTEXT.md / component_descriptions/README.md)
+
+### Datei-Layout: Build-Configs ZWINGEND am Paket-Root
+
+`CMakeLists.txt`, `package.xml`, `setup.cfg`, `requirements.txt` **müssen** im Paket-Root liegen (z. B. `source/<paketname>/`) – **niemals in Unterordnern**. Python-Komponenten liegen im gleichnamigen Unterordner (`source/<paketname>/<paketname>/*.py`). Andernfalls schlägt der Ament-Build fehl.
+
+### Signal-Type-Ergänzung: `sr.Image`
+
+Für `state_representation::Image` (AICA-natives Bild-Objekt) gilt – analog zu `sensor_msgs::msg::Image`:
+
+```json
+"signal_type": "other",
+"custom_signal_type": "state_representation::Image"
+```
+
+Beide Custom-Types sind je nach Verwendung gültig: `sensor_msgs::msg::Image` für ROS-Topic-Bilder, `state_representation::Image` für AICA-interne Bildobjekte.
+
+### Übertragungs-Einschränkung: Komplexe Listen
+
+AICA kann **Listen komplexer Objekte** (z. B. Liste von Posen, Liste von Detektionen) **nicht direkt** als Signal übertragen. Erlaubt sind nur skalare Typen, `state_representation`-Einzelobjekte und flache `double_array`s.
+
+→ **Konsequenz:** Listen-artige Daten werden mit festen **Strides** in flache `double_array`s gepackt und auf der Empfängerseite wieder entpackt. Die Stride-Definition ist Teil des Komponenten-Vertrags und muss dokumentiert sein.
+
+### Komponentenbeschreibungs-Schema (offizielle Referenz)
+
+Vollständiges JSON-Schema für `component_descriptions/*.json`:
+https://github.com/aica-technology/api/tree/main/schemas/component-descriptions
