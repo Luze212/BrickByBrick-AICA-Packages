@@ -1,0 +1,8 @@
+Model_Name: weights_m_standard_best
+Images_Tested: 79
+Misses (False Neg): 5
+Ghosts (False Pos): 1
+Avg_Accuracy_IoU: 0.9528
+Avg_Confidence: 0.911899983882904
+Avg_Inference_ms: 106.87
+Total_Benchmark_Time_s: 8.54

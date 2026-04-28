@@ -1,0 +1,8 @@
+Model_Name: weights_n_optimized_last
+Images_Tested: 79
+Misses (False Neg): 2
+Ghosts (False Pos): 2
+Avg_Accuracy_IoU: 0.9551
+Avg_Confidence: 0.9344000220298767
+Avg_Inference_ms: 32.12
+Total_Benchmark_Time_s: 2.65
