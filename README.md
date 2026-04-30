@@ -1,6 +1,6 @@
 # BrickByBrick – AICA Custom Component Package
 
-Steuerungspaket für einen KUKA-Roboter, der Bausteine per Pick-and-Place auf einer Linie ablegt. Gebaut auf dem AICA Modulo Framework (ROS 2 Lifecycle Nodes, visuell verbunden in der AICA Web-UI).
+Steuerungspaket für einen KUKA-Roboter, der Bausteine per Pick-and-Place auf einer Linie ablegt. Gebaut auf dem AICA Modulo Framework (ROS 2 Lifecycle Nodes, visuell verbunden in AICA Studio).
 
 ## Was das System macht
 
@@ -14,25 +14,25 @@ Steuerungspaket für einen KUKA-Roboter, der Bausteine per Pick-and-Place auf ei
 |---|---|
 | `ExplorationNavigator` | Fährt Explorationsposen ab, wechselt danach in Gateway-Modus |
 | `PoseTriggeredCamera` | Friert Bild + TCP-Pose synchron ein |
-| `YoloObjectDetector` | YOLOv11-Seg Inferenz → rotierte Bounding Boxes |
-| `DropoffLineExtractor` | Erkennt Ablagelinie im Bild, berechnet 3D-Ablageposen |
-| `MasterListManager` | Pinhole-Rückprojektion, Filterung, Listenverwaltung |
+| `YoloObjectDetector` | YOLOv11-Seg Inferenz → rotierte Bounding Boxes | YOD
+| `DropoffLineExtractor` | Erkennt Ablagelinie im Bild, berechnet 3D-Ablageposen | DLE
+| `MasterListManager` | Pinhole-Rückprojektion, Filterung, Listenverwaltung | MLM
 | `JtcCommandGenerator` | Berechnet Fahrtdauer und sendet TF-Frame-Kommando an JTC |
-| `PickPlaceController` | Steuert den Pick-and-Place-Ablauf in Phase 2 |
-| `VisionProcessor` | Experimentell: fasst PTC + YOD + DLE + MLM in einem Block zusammen |
+| `PickPlaceController` | Steuert den Pick-and-Place-Ablauf in Phase 2 | PTC
+| `VisionProcessor` | Fasst PTC + YOD + DLE + MLM in einem Block zusammen |
 
 ## Build
 
 ```bash
 docker build -f aica-package.toml .
 
-# nur Tests
+# nur Tests für Docker-Build
 docker build -f aica-package.toml --target test .
 ```
 
 ## Modell & Konfiguration
 
-- YOLO-Modell: `data/model/best.onnx` (im installierten Share-Verzeichnis)
+- YOLO-Modell: `data/model/best.pt` (im installierten Share-Verzeichnis)
 - Explorationsposen: `data/exploration/ExplCords.yaml`
 - Beide Pfade sind per AICA-Parameter zur Laufzeit überschreibbar.
 
@@ -44,5 +44,5 @@ docker build -f aica-package.toml --target test .
 |---|---|
 | `ARCHITECTURE.md` | Vollständige AICA-Framework-Referenz: Komponentenstruktur, Signal-Typen, Parameter-System, Service Clients, JTC-Integration, Build-System. Erste Anlaufstelle für alle Framework-Fragen. |
 | `CONTEXT.md` | Projektspezifische Datenstrukturen: Stride-Formate der Signalarrays (Stride 7, 8, 9), Erklärung des Flattening-Prinzips, Hinweis auf `geometry_utils.py`. |
-| `CLAUDE.md` | Anweisungen für KI-Assistenten beim Arbeiten im Projekt: kritische Regeln zum AICA-Framework, Dateistruktur, verbotene Muster. |
+| `CLAUDE.md` | Anweisungen für KI-Assistenten Claude beim Arbeiten im Projekt: kritische Regeln zum AICA-Framework, Dateistruktur, verbotene Muster. |
 | `README_AICA-Package.md` | Originale Vorlage des AICA Package Templates mit allgemeinen Hinweisen zu DevContainer, Wizard und Abhängigkeiten. |
